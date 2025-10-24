@@ -619,7 +619,14 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      compute_kpis: {
+        Args: { p_company_id: string; p_period_id: string }
+        Returns: undefined
+      }
+      compute_period_summary: {
+        Args: { p_company_id: string; p_period_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       account_category:

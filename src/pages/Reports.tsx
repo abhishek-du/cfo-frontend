@@ -29,7 +29,7 @@ const Reports = () => {
   // Mock KPI summary data
   const kpiSummaryData = [
     { kpi: "Gross Margin %", current: "40.0%", prev: "38.5%", change: "+1.5%", trend: "up" },
-    { kpi: "Operating Margin %", kpi: "Operating Margin %", current: "20.0%", prev: "18.2%", change: "+1.8%", trend: "up" },
+    { kpi: "Operating Margin %", current: "20.0%", prev: "18.2%", change: "+1.8%", trend: "up" },
     { kpi: "Net Profit Margin %", current: "15.5%", prev: "14.1%", change: "+1.4%", trend: "up" },
     { kpi: "Current Ratio", current: "2.35", prev: "2.18", change: "+0.17", trend: "up" },
     { kpi: "Quick Ratio", current: "1.85", prev: "1.72", change: "+0.13", trend: "up" },
