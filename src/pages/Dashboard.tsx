@@ -1,19 +1,29 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SummaryTiles } from "@/components/dashboard/SummaryTiles";
 import { RatioSections } from "@/components/dashboard/RatioSections";
 import { ProfitabilityChart } from "@/components/dashboard/ProfitabilityChart";
 import { RatioTrendChart } from "@/components/dashboard/RatioTrendChart";
 import { AdvicePanel } from "@/components/dashboard/AdvicePanel";
+import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 
 const Dashboard = () => {
+  const [selectedPeriod, setSelectedPeriod] = useState("2024-01");
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Overview of your financial performance
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Overview of your financial performance
+            </p>
+          </div>
+          <PeriodSelector 
+            selectedPeriod={selectedPeriod} 
+            onPeriodChange={setSelectedPeriod} 
+          />
         </div>
 
         {/* Summary Tiles */}
