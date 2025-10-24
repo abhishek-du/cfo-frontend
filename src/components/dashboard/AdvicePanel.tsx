@@ -1,87 +1,116 @@
-import { Card } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, AlertTriangle, Info, Bookmark, X } from "lucide-react";
+import { Lightbulb, RefreshCw } from "lucide-react";
+import { useGenerateInsights } from "@/hooks/useFinancialData";
+import { toast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
-interface AdviceItem {
-  id: string;
-  severity: "info" | "warning" | "critical";
-  title: string;
-  description: string;
+interface AdvicePanelProps {
+  companyId?: string;
+  periodId?: string;
 }
 
-const adviceItems: AdviceItem[] = [
-  {
-    id: "1",
-    severity: "warning",
-    title: "Cash Flow Attention Needed",
-    description: "Your cash flow has been negative for two consecutive months. Consider reviewing payment terms with customers or reducing non-essential expenses.",
-  },
-  {
-    id: "2",
-    severity: "info",
-    title: "Margin Improvement",
-    description: "Your profit margin has improved by 6% since last quarter. This is a great time to consider reinvesting in marketing while maintaining cost control.",
-  },
-  {
-    id: "3",
-    severity: "critical",
-    title: "Gross Margin Below Target",
-    description: "Gross margin has fallen below 30% for two consecutive periods. Review supplier contracts or pricing strategy to address this decline.",
-  },
-];
+interface Insight {
+  title: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  category: string;
+}
 
-const severityConfig = {
-  info: { icon: Info, color: "text-accent", bg: "bg-accent/10", label: "Info" },
-  warning: { icon: AlertTriangle, color: "text-warning", bg: "bg-warning/10", label: "Warning" },
-  critical: { icon: AlertCircle, color: "text-destructive", bg: "bg-destructive/10", label: "Critical" },
-};
+export const AdvicePanel = ({ companyId, periodId }: AdvicePanelProps) => {
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const generateInsights = useGenerateInsights();
 
-export const AdvicePanel = () => {
+  const fetchInsights = async () => {
+    if (!companyId || !periodId) return;
+
+    setIsLoading(true);
+    try {
+      const data = await generateInsights(companyId, periodId);
+      setInsights(data.insights || []);
+    } catch (error) {
+      console.error('Error fetching insights:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate insights. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (companyId && periodId) {
+      fetchInsights();
+    }
+  }, [companyId, periodId]);
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "bg-destructive text-destructive-foreground";
+      case "medium":
+        return "bg-warning text-warning-foreground";
+      case "low":
+        return "bg-muted text-muted-foreground";
+      default:
+        return "bg-secondary";
+    }
+  };
+
   return (
-    <Card className="p-6">
-      <div className="space-y-4">
+    <Card className="h-full">
+      <CardHeader>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">AI Insights</h2>
-          <Badge variant="secondary">{adviceItems.length} insights</Badge>
+          <CardTitle className="flex items-center gap-2">
+            <Lightbulb className="h-5 w-5 text-primary" />
+            AI Insights
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchInsights}
+            disabled={isLoading || !companyId || !periodId}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
-
-        <div className="space-y-3">
-          {adviceItems.map((item) => {
-            const config = severityConfig[item.severity];
-            const Icon = config.icon;
-
-            return (
-              <Card key={item.id} className={`p-4 ${config.bg} border-l-4 border-l-current ${config.color}`}>
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2">
-                      <Icon className={`h-5 w-5 ${config.color} mt-0.5 flex-shrink-0`} />
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm text-foreground">{item.title}</h4>
-                          <Badge variant="outline" className="text-xs">
-                            {config.label}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <Bookmark className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ))}
+          </>
+        ) : insights.length > 0 ? (
+          insights.map((insight, index) => (
+            <div
+              key={index}
+              className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <h4 className="font-semibold text-sm">{insight.title}</h4>
+                <Badge className={getPriorityColor(insight.priority)}>
+                  {insight.priority}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">{insight.description}</p>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <p className="text-sm">Upload trial balance data to generate AI insights</p>
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 };

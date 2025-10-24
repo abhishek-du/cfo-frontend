@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SummaryTiles } from "@/components/dashboard/SummaryTiles";
 import { RatioSections } from "@/components/dashboard/RatioSections";
@@ -6,9 +6,43 @@ import { ProfitabilityChart } from "@/components/dashboard/ProfitabilityChart";
 import { RatioTrendChart } from "@/components/dashboard/RatioTrendChart";
 import { AdvicePanel } from "@/components/dashboard/AdvicePanel";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
+import { useCurrentUser, usePeriods } from "@/hooks/useFinancialData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Dashboard = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState("2024-01");
+  const { data: userData, isLoading: userLoading } = useCurrentUser();
+  const companyId = userData?.profile?.company_id;
+  
+  const { data: periods, isLoading: periodsLoading } = usePeriods(companyId || '');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+
+  // Set first period as default when loaded
+  useEffect(() => {
+    if (periods && periods.length > 0 && !selectedPeriod) {
+      setSelectedPeriod(periods[0].id);
+    }
+  }, [periods, selectedPeriod]);
+
+  if (userLoading || periodsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!companyId) {
+    return (
+      <DashboardLayout>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Unable to load company data</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -44,7 +78,7 @@ const Dashboard = () => {
 
           {/* Right Column - Advice Panel */}
           <div className="xl:col-span-1">
-            <AdvicePanel />
+            <AdvicePanel companyId={companyId} periodId={selectedPeriod} />
           </div>
         </div>
       </div>
