@@ -26,11 +26,14 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      // Create auth user
+      const redirectUrl = `${window.location.origin}/onboarding`;
+      
+      // Step 1: Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             full_name: formData.fullName,
             company_name: formData.companyName,
@@ -39,12 +42,42 @@ const Signup = () => {
       });
 
       if (authError) throw authError;
+      if (!authData.user) throw new Error("User creation failed");
 
-      if (authData.user) {
-        toast.success("Account created successfully! Please complete your profile.");
+      // Step 2: Create company record
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .insert([{ 
+          name: formData.companyName,
+          industry: formData.industry || null
+        }])
+        .select()
+        .single();
+
+      if (companyError) throw companyError;
+      if (!companyData) throw new Error("Company creation failed");
+
+      // Step 3: Create user profile
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert([{
+          id: authData.user.id,
+          company_id: companyData.id,
+          email: formData.email,
+          full_name: formData.fullName
+        }]);
+
+      if (profileError) throw profileError;
+
+      toast.success("Account created successfully! Redirecting to onboarding...");
+      
+      // Redirect after brief delay
+      setTimeout(() => {
         navigate("/onboarding");
-      }
+      }, 1500);
+
     } catch (error: any) {
+      console.error("Signup error:", error);
       toast.error(error.message || "Failed to create account");
     } finally {
       setLoading(false);
