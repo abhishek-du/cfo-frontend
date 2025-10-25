@@ -44,30 +44,24 @@ const Signup = () => {
       if (authError) throw authError;
       if (!authData.user) throw new Error("User creation failed");
 
-      // Step 2: Create company record
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .insert([{ 
-          name: formData.companyName,
-          industry: formData.industry || null
-        }])
-        .select()
-        .single();
+      // Step 2: Complete signup (create company and profile) via secure RPC
+      const { data: signupResult, error: signupError } = await supabase.rpc(
+        'complete_user_signup',
+        {
+          p_user_id: authData.user.id,
+          p_company_name: formData.companyName,
+          p_industry: formData.industry || null,
+          p_full_name: formData.fullName,
+          p_email: formData.email
+        }
+      );
 
-      if (companyError) throw companyError;
-      if (!companyData) throw new Error("Company creation failed");
-
-      // Step 3: Create user profile
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .insert([{
-          id: authData.user.id,
-          company_id: companyData.id,
-          email: formData.email,
-          full_name: formData.fullName
-        }]);
-
-      if (profileError) throw profileError;
+      if (signupError) throw signupError;
+      
+      const result = signupResult as { success: boolean; error?: string; company_id?: string };
+      if (!result?.success) {
+        throw new Error(result?.error || "Signup failed");
+      }
 
       toast.success("Account created successfully! Redirecting to onboarding...");
       

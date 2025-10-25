@@ -619,6 +619,16 @@ export type Database = {
       }
     }
     Functions: {
+      complete_user_signup: {
+        Args: {
+          p_company_name: string
+          p_email: string
+          p_full_name: string
+          p_industry: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       compute_kpis: {
         Args: { p_company_id: string; p_period_id: string }
         Returns: undefined
