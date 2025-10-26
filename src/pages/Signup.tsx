@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { toast } from "sonner";
 import { BarChart3 } from "lucide-react";
 
@@ -15,9 +15,6 @@ const Signup = () => {
     fullName: "",
     email: "",
     password: "",
-    companyName: "",
-    industry: "",
-    fiscalYearEnd: "12",
   });
   const [loading, setLoading] = useState(false);
 
@@ -28,7 +25,7 @@ const Signup = () => {
     try {
       const redirectUrl = `${window.location.origin}/onboarding`;
       
-      // Step 1: Create auth user
+      // Create auth user - trigger will handle company and profile creation
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -36,7 +33,6 @@ const Signup = () => {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: formData.fullName,
-            company_name: formData.companyName,
           },
         },
       });
@@ -44,31 +40,9 @@ const Signup = () => {
       if (authError) throw authError;
       if (!authData.user) throw new Error("User creation failed");
 
-      // Step 2: Complete signup (create company and profile) via secure RPC
-      const { data: signupResult, error: signupError } = await supabase.rpc(
-        'complete_user_signup',
-        {
-          p_user_id: authData.user.id,
-          p_company_name: formData.companyName,
-          p_industry: formData.industry || null,
-          p_full_name: formData.fullName,
-          p_email: formData.email
-        }
-      );
-
-      if (signupError) throw signupError;
+      toast.success("Account created! Please check your email to verify your account.");
       
-      const result = signupResult as { success: boolean; error?: string; company_id?: string };
-      if (!result?.success) {
-        throw new Error(result?.error || "Signup failed");
-      }
-
-      toast.success("Account created successfully! Redirecting to onboarding...");
-      
-      // Redirect after brief delay
-      setTimeout(() => {
-        navigate("/onboarding");
-      }, 1500);
+      // User will be redirected to /onboarding after clicking the email verification link
 
     } catch (error: any) {
       console.error("Signup error:", error);
@@ -129,57 +103,6 @@ const Signup = () => {
                   disabled={loading}
                   minLength={6}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Company Name</Label>
-                <Input
-                  id="companyName"
-                  placeholder="Acme Inc."
-                  value={formData.companyName}
-                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="industry">Industry</Label>
-                <Select
-                  value={formData.industry}
-                  onValueChange={(value) => setFormData({ ...formData, industry: value })}
-                  disabled={loading}
-                >
-                  <SelectTrigger id="industry">
-                    <SelectValue placeholder="Select industry" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="technology">Technology</SelectItem>
-                    <SelectItem value="retail">Retail</SelectItem>
-                    <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                    <SelectItem value="services">Professional Services</SelectItem>
-                    <SelectItem value="healthcare">Healthcare</SelectItem>
-                    <SelectItem value="finance">Finance</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fiscalYearEnd">Fiscal Year End Month</Label>
-                <Select
-                  value={formData.fiscalYearEnd}
-                  onValueChange={(value) => setFormData({ ...formData, fiscalYearEnd: value })}
-                  disabled={loading}
-                >
-                  <SelectTrigger id="fiscalYearEnd">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                      <SelectItem key={month} value={month.toString()}>
-                        {new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Creating account..." : "Create account"}
