@@ -6,9 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Edit } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const Admin = () => {
+  const { isAdmin, isLoading } = useUserRole();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && !isAdmin) {
+      toast.error("Access denied. Admin privileges required.");
+      navigate("/dashboard");
+    }
+  }, [isAdmin, isLoading, navigate]);
+
   // Mock KPI catalog data
   const [kpiCatalog, setKpiCatalog] = useState([
     { id: "1", code: "gross_margin", name: "Gross Margin %", category: "profitability", active: true },

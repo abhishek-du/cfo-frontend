@@ -11,10 +11,12 @@ import {
 import { BarChart3, LayoutDashboard, FileText, Upload, Settings, User, LogOut, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export const DashboardNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useUserRole();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -59,12 +61,14 @@ export const DashboardNav = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <Link to="/admin">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline">Admin</span>
-              </Button>
-            </Link>
+            {isAdmin && (
+              <Link to="/admin">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Shield className="h-4 w-4" />
+                  <span className="hidden sm:inline">Admin</span>
+                </Button>
+              </Link>
+            )}
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

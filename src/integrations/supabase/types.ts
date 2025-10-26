@@ -559,6 +559,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_period_account_totals: {
@@ -627,6 +648,13 @@ export type Database = {
         Args: { p_company_id: string; p_period_id: string }
         Returns: undefined
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       account_category:
@@ -638,6 +666,7 @@ export type Database = {
         | "operating_expense"
         | "other_income"
         | "other_expense"
+      app_role: "admin" | "user"
       import_status: "pending" | "processing" | "succeeded" | "failed"
       kpi_formula_type: "ratio" | "percentage" | "absolute" | "custom"
       period_type: "monthly" | "quarterly" | "annual"
@@ -778,6 +807,7 @@ export const Constants = {
         "other_income",
         "other_expense",
       ],
+      app_role: ["admin", "user"],
       import_status: ["pending", "processing", "succeeded", "failed"],
       kpi_formula_type: ["ratio", "percentage", "absolute", "custom"],
       period_type: ["monthly", "quarterly", "annual"],
