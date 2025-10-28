@@ -1,51 +1,85 @@
 import { RatioCard } from "./RatioCard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/components/ui/card";
+import { useKPIValues } from "@/hooks/useFinancialData";
 
-const ratioSections = [
-  {
-    title: "Liquidity Ratios",
-    ratios: [
-      { name: "Current Ratio", value: "2.4", change: 5.2, definition: "Current Assets / Current Liabilities" },
-      { name: "Quick Ratio", value: "1.8", change: 3.1, definition: "(Current Assets - Inventory) / Current Liabilities" },
-      { name: "Cash Ratio", value: "0.9", change: -2.3, definition: "Cash / Current Liabilities" },
-    ],
-  },
-  {
-    title: "Profitability Ratios",
-    ratios: [
-      { name: "Gross Margin %", value: "42.5%", change: 2.8, definition: "(Revenue - COGS) / Revenue" },
-      { name: "Net Profit Margin %", value: "18.2%", change: 4.5, definition: "Net Profit / Revenue" },
-      { name: "Return on Assets", value: "12.4%", change: 1.9, definition: "Net Income / Total Assets" },
-      { name: "Return on Equity", value: "22.1%", change: 6.2, definition: "Net Income / Shareholders Equity" },
-    ],
-  },
-  {
-    title: "Leverage Ratios",
-    ratios: [
-      { name: "Debt-to-Equity", value: "0.45", change: -1.5, definition: "Total Debt / Total Equity" },
-      { name: "Interest Coverage", value: "8.2", change: 12.3, definition: "EBIT / Interest Expense" },
-      { name: "Debt Ratio", value: "0.31", change: -2.1, definition: "Total Debt / Total Assets" },
-    ],
-  },
-  {
-    title: "Efficiency Ratios",
-    ratios: [
-      { name: "Inventory Turnover", value: "6.4", change: 8.7, definition: "COGS / Average Inventory" },
-      { name: "Receivables Days", value: "42", change: -5.2, definition: "(Accounts Receivable / Revenue) × 365" },
-      { name: "Payables Days", value: "38", change: 2.8, definition: "(Accounts Payable / COGS) × 365" },
-    ],
-  },
-];
+interface RatioSectionsProps {
+  companyId: string;
+  periodId: string;
+}
 
-export const RatioSections = () => {
+const CATEGORY_TITLES: Record<string, string> = {
+  liquidity: "Liquidity Ratios",
+  profitability: "Profitability Ratios",
+  leverage: "Leverage Ratios",
+  efficiency: "Efficiency Ratios",
+};
+
+export const RatioSections = ({ companyId, periodId }: RatioSectionsProps) => {
+  const { data: kpiValues, isLoading } = useKPIValues(companyId, periodId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="space-y-3">
+            <Skeleton className="h-6 w-48" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((j) => (
+                <Skeleton key={j} className="h-24" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!kpiValues || kpiValues.length === 0) {
+    return (
+      <Card className="p-6">
+        <p className="text-muted-foreground text-center">
+          No KPI data available. Please compute KPIs from the Reports page.
+        </p>
+      </Card>
+    );
+  }
+
+  // Group KPIs by category
+  const groupedKPIs = kpiValues.reduce((acc, kpi) => {
+    const category = kpi.kpi_catalog?.category || 'other';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(kpi);
+    return acc;
+  }, {} as Record<string, typeof kpiValues>);
+
   return (
     <div className="space-y-6">
-      {ratioSections.map((section, index) => (
-        <div key={index} className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">{section.title}</h2>
+      {Object.entries(groupedKPIs).map(([category, kpis]) => (
+        <div key={category} className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">
+            {CATEGORY_TITLES[category] || category}
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {section.ratios.map((ratio, ratioIndex) => (
-              <RatioCard key={ratioIndex} {...ratio} />
-            ))}
+            {kpis.map((kpi, index) => {
+              const isPercentage = kpi.kpi_catalog?.display_format === 'percentage';
+              const value = kpi.value || 0;
+              const formattedValue = isPercentage 
+                ? `${value.toFixed(1)}%` 
+                : value.toFixed(2);
+              
+              return (
+                <RatioCard
+                  key={index}
+                  name={kpi.kpi_catalog?.name || 'Unknown'}
+                  value={formattedValue}
+                  change={kpi.change_percent || 0}
+                  definition={kpi.kpi_catalog?.description || ''}
+                />
+              );
+            })}
           </div>
         </div>
       ))}

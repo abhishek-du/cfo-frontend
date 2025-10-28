@@ -64,13 +64,17 @@ const Dashboard = () => {
         </div>
 
         {/* Summary Tiles */}
-        <SummaryTiles />
+        {selectedPeriod && (
+          <SummaryTiles companyId={companyId} periodId={selectedPeriod} />
+        )}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Left Column - Ratios and Charts */}
           <div className="xl:col-span-2 space-y-6">
-            <RatioSections />
+            {selectedPeriod && (
+              <RatioSections companyId={companyId} periodId={selectedPeriod} />
+            )}
             
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

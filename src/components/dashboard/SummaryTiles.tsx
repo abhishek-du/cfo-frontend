@@ -1,21 +1,64 @@
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useFinancialSummary } from "@/hooks/useFinancialData";
 
-interface TileData {
-  title: string;
-  value: string;
-  change: number;
-  changeLabel: string;
+interface SummaryTilesProps {
+  companyId: string;
+  periodId: string;
 }
 
-const tiles: TileData[] = [
-  { title: "Total Revenue", value: "$1,245,820", change: 12.5, changeLabel: "vs last period" },
-  { title: "Total Cost", value: "$847,340", change: 8.2, changeLabel: "vs last period" },
-  { title: "Profit / Loss", value: "$398,480", change: 24.3, changeLabel: "vs last period" },
-  { title: "Margin %", value: "32.0%", change: 3.4, changeLabel: "vs last period" },
-];
+export const SummaryTiles = ({ companyId, periodId }: SummaryTilesProps) => {
+  const { data: summary, isLoading } = useFinancialSummary(companyId, periodId);
 
-export const SummaryTiles = () => {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-32" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <Card className="p-6">
+        <p className="text-muted-foreground text-center">
+          No financial data available for this period. Please upload a trial balance.
+        </p>
+      </Card>
+    );
+  }
+
+  const totalRevenue = Math.abs(summary.total_revenue || 0);
+  const totalCost = Math.abs(summary.total_cogs || 0) + Math.abs(summary.total_opex || 0);
+  const netProfit = summary.net_profit || 0;
+  const marginPercent = summary.margin_percent || 0;
+
+  const tiles = [
+    {
+      title: "Total Revenue",
+      value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      change: 0,
+    },
+    {
+      title: "Total Cost",
+      value: `$${totalCost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      change: 0,
+    },
+    {
+      title: "Profit / Loss",
+      value: `$${netProfit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      change: 0,
+    },
+    {
+      title: "Margin %",
+      value: `${marginPercent.toFixed(1)}%`,
+      change: 0,
+    },
+  ];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {tiles.map((tile, index) => (
@@ -24,20 +67,6 @@ export const SummaryTiles = () => {
             <p className="text-sm font-medium text-muted-foreground">{tile.title}</p>
             <div className="flex items-baseline justify-between">
               <h3 className="text-2xl font-bold text-foreground">{tile.value}</h3>
-            </div>
-            <div className="flex items-center gap-1 text-sm">
-              {tile.change >= 0 ? (
-                <>
-                  <TrendingUp className="h-4 w-4 text-success" />
-                  <span className="font-medium text-success">+{tile.change}%</span>
-                </>
-              ) : (
-                <>
-                  <TrendingDown className="h-4 w-4 text-destructive" />
-                  <span className="font-medium text-destructive">{tile.change}%</span>
-                </>
-              )}
-              <span className="text-muted-foreground ml-1">{tile.changeLabel}</span>
             </div>
           </div>
         </Card>
