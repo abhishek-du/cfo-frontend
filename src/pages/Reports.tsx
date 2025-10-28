@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, Search, AlertCircle } from "lucide-react";
+import { Download, Search, AlertCircle, RefreshCw } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { useCurrentUser, usePeriods, useMappedTrialBalance, useKPIValues } from "@/hooks/useFinancialData";
+import { useCurrentUser, usePeriods, useMappedTrialBalance, useKPIValues, useComputeKPIs } from "@/hooks/useFinancialData";
 
 const Reports = () => {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ const Reports = () => {
   const { data: periods, isLoading: periodsLoading } = usePeriods(companyId || "");
   const { data: trialBalanceData, isLoading: tbLoading } = useMappedTrialBalance(companyId || "", selectedPeriod);
   const { data: kpiData, isLoading: kpiLoading } = useKPIValues(companyId || "", selectedPeriod);
+  const computeKPIs = useComputeKPIs();
 
   // Set first period as default when periods load
   useEffect(() => {
@@ -124,6 +126,35 @@ const Reports = () => {
       case "decimal":
       default:
         return value.toFixed(2);
+    }
+  };
+
+  const handleRefreshKPIs = async () => {
+    if (!companyId || !selectedPeriod) {
+      toast({
+        title: "Error",
+        description: "Please select a period first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await computeKPIs.mutateAsync({
+        companyId,
+        periodId: selectedPeriod,
+      });
+      toast({
+        title: "Success",
+        description: "KPIs refreshed successfully",
+      });
+    } catch (error) {
+      console.error('Error refreshing KPIs:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh KPIs. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -270,14 +301,24 @@ const Reports = () => {
                       Key performance indicators for {selectedPeriodLabel}
                     </CardDescription>
                   </div>
-                  <Button 
-                    onClick={handleExportKPICSV} 
-                    className="gap-2"
-                    disabled={!kpiData || kpiData.length === 0}
-                  >
-                    <Download className="h-4 w-4" />
-                    Export CSV
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleRefreshKPIs} 
+                      variant="outline"
+                      disabled={!selectedPeriod || computeKPIs.isPending}
+                    >
+                      <RefreshCw className={`mr-2 h-4 w-4 ${computeKPIs.isPending ? 'animate-spin' : ''}`} />
+                      {computeKPIs.isPending ? 'Computing...' : 'Refresh KPIs'}
+                    </Button>
+                    <Button 
+                      onClick={handleExportKPICSV} 
+                      className="gap-2"
+                      disabled={!kpiData || kpiData.length === 0}
+                    >
+                      <Download className="h-4 w-4" />
+                      Export CSV
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>

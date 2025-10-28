@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export const useFinancialSummary = (companyId: string, periodId: string) => {
@@ -380,5 +380,26 @@ export const useMappedTrialBalance = (companyId: string, periodId: string) => {
       return data;
     },
     enabled: !!companyId && !!periodId,
+  });
+};
+
+export const useComputeKPIs = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ companyId, periodId }: { companyId: string; periodId: string }) => {
+      const { data, error } = await supabase.functions.invoke('compute-period-kpis', {
+        body: { companyId, periodId },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kpi-values'] });
+      queryClient.invalidateQueries({ queryKey: ['financial-summary'] });
+    },
   });
 };
