@@ -365,3 +365,48 @@ export const useDeleteAccountMapping = () => {
     if (error) throw error;
   };
 };
+
+export const useMappedTrialBalance = (companyId: string, periodId: string) => {
+  return useQuery({
+    queryKey: ['mapped-trial-balance', companyId, periodId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('period_summary')
+        .select(`
+          total_debit,
+          total_credit,
+          net_balance,
+          std_accounts (
+            code,
+            name
+          )
+        `)
+        .eq('company_id', companyId)
+        .eq('period_id', periodId)
+        .order('std_accounts(code)');
+
+      if (error) throw error;
+
+      // Get account mappings to show client codes/names
+      const { data: mappings } = await supabase
+        .from('account_mappings')
+        .select('std_account_id, client_account_code, client_account_name')
+        .eq('company_id', companyId);
+
+      // Merge the data
+      return data.map(row => {
+        const mapping = mappings?.find(m => m.std_account_id === (row.std_accounts as any).id);
+        return {
+          std_account_code: (row.std_accounts as any)?.code,
+          std_account_name: (row.std_accounts as any)?.name,
+          client_account_code: mapping?.client_account_code || '-',
+          client_account_name: mapping?.client_account_name || '-',
+          total_debit: row.total_debit || 0,
+          total_credit: row.total_credit || 0,
+          net_balance: row.net_balance || 0,
+        };
+      });
+    },
+    enabled: !!companyId && !!periodId,
+  });
+};

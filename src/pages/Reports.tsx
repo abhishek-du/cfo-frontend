@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,52 +7,57 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Download, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download, Search, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useCurrentUser, usePeriods, useMappedTrialBalance, useKPIValues } from "@/hooks/useFinancialData";
 
 const Reports = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState("2024-01");
+  const navigate = useNavigate();
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Mock mapped trial balance data
-  const trialBalanceData = [
-    { code: "1110", name: "Cash & Cash Equivalents", clientCode: "1001", debit: 125000, credit: 0, balance: 125000 },
-    { code: "1120", name: "Accounts Receivable", clientCode: "1200", debit: 85000, credit: 0, balance: 85000 },
-    { code: "1130", name: "Inventory", clientCode: "1300", debit: 65000, credit: 0, balance: 65000 },
-    { code: "2110", name: "Accounts Payable", clientCode: "2001", debit: 0, credit: 45000, balance: -45000 },
-    { code: "2130", name: "Short-term Debt", clientCode: "2100", debit: 0, credit: 35000, balance: -35000 },
-    { code: "3200", name: "Retained Earnings", clientCode: "3000", debit: 0, credit: 95000, balance: -95000 },
-    { code: "4100", name: "Sales Revenue", clientCode: "4000", debit: 0, credit: 425000, balance: -425000 },
-    { code: "5000", name: "Cost of Goods Sold", clientCode: "5000", debit: 255000, credit: 0, balance: 255000 },
-    { code: "6100", name: "Salaries & Wages", clientCode: "6001", debit: 85000, credit: 0, balance: 85000 },
-    { code: "6200", name: "Rent & Utilities", clientCode: "6100", debit: 35000, credit: 0, balance: 35000 },
-  ];
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
+  const companyId = currentUser?.profile?.company_id;
+  
+  const { data: periods, isLoading: periodsLoading } = usePeriods(companyId || "");
+  const { data: trialBalanceData, isLoading: tbLoading } = useMappedTrialBalance(companyId || "", selectedPeriod);
+  const { data: kpiData, isLoading: kpiLoading } = useKPIValues(companyId || "", selectedPeriod);
 
-  // Mock KPI summary data
-  const kpiSummaryData = [
-    { kpi: "Gross Margin %", current: "40.0%", prev: "38.5%", change: "+1.5%", trend: "up" },
-    { kpi: "Operating Margin %", current: "20.0%", prev: "18.2%", change: "+1.8%", trend: "up" },
-    { kpi: "Net Profit Margin %", current: "15.5%", prev: "14.1%", change: "+1.4%", trend: "up" },
-    { kpi: "Current Ratio", current: "2.35", prev: "2.18", change: "+0.17", trend: "up" },
-    { kpi: "Quick Ratio", current: "1.85", prev: "1.72", change: "+0.13", trend: "up" },
-    { kpi: "Debt-to-Equity", current: "0.42", prev: "0.48", change: "-0.06", trend: "down" },
-  ];
+  // Set first period as default when periods load
+  useEffect(() => {
+    if (periods && periods.length > 0 && !selectedPeriod) {
+      setSelectedPeriod(periods[0].id);
+    }
+  }, [periods, selectedPeriod]);
 
-  const filteredTrialBalance = trialBalanceData.filter(
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!userLoading && !currentUser) {
+      navigate("/login");
+    }
+  }, [currentUser, userLoading, navigate]);
+
+  const filteredTrialBalance = (trialBalanceData || []).filter(
     (row) =>
-      row.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      row.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      row.clientCode.toLowerCase().includes(searchQuery.toLowerCase())
+      row.std_account_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      row.std_account_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      row.client_account_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      row.client_account_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleExportCSV = () => {
-    const headers = ["Standard Code", "Account Name", "Client Code", "Debit", "Credit", "Balance"];
+  const handleExportTrialBalanceCSV = () => {
+    if (!trialBalanceData || trialBalanceData.length === 0) return;
+    
+    const headers = ["Standard Code", "Account Name", "Client Code", "Client Account Name", "Debit", "Credit", "Balance"];
     const rows = filteredTrialBalance.map((row) => [
-      row.code,
-      row.name,
-      row.clientCode,
-      row.debit.toFixed(2),
-      row.credit.toFixed(2),
-      row.balance.toFixed(2),
+      row.std_account_code,
+      row.std_account_name,
+      row.client_account_code,
+      row.client_account_name,
+      row.total_debit?.toFixed(2) || "0.00",
+      row.total_credit?.toFixed(2) || "0.00",
+      row.net_balance?.toFixed(2) || "0.00",
     ]);
 
     const csvContent = [
@@ -63,12 +69,40 @@ const Reports = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `trial_balance_${selectedPeriod}.csv`;
+    const periodLabel = periods?.find(p => p.id === selectedPeriod)?.label || selectedPeriod;
+    a.download = `trial_balance_${periodLabel}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
 
-  const formatCurrency = (value: number) => {
+  const handleExportKPICSV = () => {
+    if (!kpiData || kpiData.length === 0) return;
+    
+    const headers = ["KPI", "Current Period", "Previous Period", "Change %"];
+    const rows = kpiData.map((kpi: any) => [
+      kpi.kpi_catalog?.name,
+      formatKPIValue(kpi.value, kpi.kpi_catalog?.display_format),
+      formatKPIValue(kpi.previous_period_value, kpi.kpi_catalog?.display_format),
+      kpi.change_percent ? `${kpi.change_percent.toFixed(2)}%` : "N/A",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const periodLabel = periods?.find(p => p.id === selectedPeriod)?.label || selectedPeriod;
+    a.download = `kpi_summary_${periodLabel}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const formatCurrency = (value: number | null | undefined) => {
+    if (value === null || value === undefined) return "$0";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
@@ -76,6 +110,33 @@ const Reports = () => {
       maximumFractionDigits: 0,
     }).format(Math.abs(value));
   };
+
+  const formatKPIValue = (value: number | null | undefined, format: string | undefined) => {
+    if (value === null || value === undefined) return "N/A";
+    
+    switch (format) {
+      case "percentage":
+        return `${value.toFixed(1)}%`;
+      case "currency":
+        return formatCurrency(value);
+      case "decimal":
+      default:
+        return value.toFixed(2);
+    }
+  };
+
+  if (userLoading || periodsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-64" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const selectedPeriodLabel = periods?.find(p => p.id === selectedPeriod)?.label || "";
 
   return (
     <DashboardLayout>
@@ -89,12 +150,14 @@ const Reports = () => {
           </div>
           <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue />
+              <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2024-01">January 2024</SelectItem>
-              <SelectItem value="2023-12">December 2023</SelectItem>
-              <SelectItem value="2023-11">November 2023</SelectItem>
+              {periods?.map((period) => (
+                <SelectItem key={period.id} value={period.id}>
+                  {period.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -112,10 +175,14 @@ const Reports = () => {
                   <div>
                     <CardTitle>Mapped Trial Balance</CardTitle>
                     <CardDescription>
-                      Trial balance with mapped standard accounts for {selectedPeriod}
+                      Trial balance with mapped standard accounts for {selectedPeriodLabel}
                     </CardDescription>
                   </div>
-                  <Button onClick={handleExportCSV} className="gap-2">
+                  <Button 
+                    onClick={handleExportTrialBalanceCSV} 
+                    className="gap-2"
+                    disabled={!trialBalanceData || trialBalanceData.length === 0}
+                  >
                     <Download className="h-4 w-4" />
                     Export CSV
                   </Button>
@@ -132,38 +199,55 @@ const Reports = () => {
                   />
                 </div>
 
-                <div className="border rounded-lg">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Standard Code</TableHead>
-                        <TableHead>Account Name</TableHead>
-                        <TableHead>Client Code</TableHead>
-                        <TableHead className="text-right">Debit</TableHead>
-                        <TableHead className="text-right">Credit</TableHead>
-                        <TableHead className="text-right">Balance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTrialBalance.map((row) => (
-                        <TableRow key={row.code}>
-                          <TableCell className="font-medium">{row.code}</TableCell>
-                          <TableCell>{row.name}</TableCell>
-                          <TableCell className="text-muted-foreground">{row.clientCode}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {row.debit > 0 ? formatCurrency(row.debit) : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {row.credit > 0 ? formatCurrency(row.credit) : "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-medium">
-                            {formatCurrency(row.balance)}
-                          </TableCell>
+                {tbLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : !trialBalanceData || trialBalanceData.length === 0 ? (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No trial balance data available for this period. Please upload trial balance data from the Uploads page.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Standard Code</TableHead>
+                          <TableHead>Account Name</TableHead>
+                          <TableHead>Client Code</TableHead>
+                          <TableHead>Client Account Name</TableHead>
+                          <TableHead className="text-right">Debit</TableHead>
+                          <TableHead className="text-right">Credit</TableHead>
+                          <TableHead className="text-right">Balance</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredTrialBalance.map((row, idx) => (
+                          <TableRow key={`${row.std_account_code}-${idx}`}>
+                            <TableCell className="font-medium">{row.std_account_code}</TableCell>
+                            <TableCell>{row.std_account_name}</TableCell>
+                            <TableCell className="text-muted-foreground">{row.client_account_code}</TableCell>
+                            <TableCell className="text-muted-foreground">{row.client_account_name}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {row.total_debit && row.total_debit > 0 ? formatCurrency(row.total_debit) : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {row.total_credit && row.total_credit > 0 ? formatCurrency(row.total_credit) : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-medium">
+                              {formatCurrency(row.net_balance)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -175,50 +259,77 @@ const Reports = () => {
                   <div>
                     <CardTitle>KPI Summary</CardTitle>
                     <CardDescription>
-                      Key performance indicators for {selectedPeriod}
+                      Key performance indicators for {selectedPeriodLabel}
                     </CardDescription>
                   </div>
-                  <Button onClick={handleExportCSV} className="gap-2">
+                  <Button 
+                    onClick={handleExportKPICSV} 
+                    className="gap-2"
+                    disabled={!kpiData || kpiData.length === 0}
+                  >
                     <Download className="h-4 w-4" />
                     Export CSV
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="border rounded-lg">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>KPI</TableHead>
-                        <TableHead className="text-right">Current Period</TableHead>
-                        <TableHead className="text-right">Previous Period</TableHead>
-                        <TableHead className="text-right">Change</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {kpiSummaryData.map((kpi) => (
-                        <TableRow key={kpi.kpi}>
-                          <TableCell className="font-medium">{kpi.kpi}</TableCell>
-                          <TableCell className="text-right font-mono">{kpi.current}</TableCell>
-                          <TableCell className="text-right font-mono text-muted-foreground">
-                            {kpi.prev}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            <span
-                              className={
-                                kpi.trend === "up"
-                                  ? "text-success"
-                                  : "text-muted-foreground"
-                              }
-                            >
-                              {kpi.change}
-                            </span>
-                          </TableCell>
+                {kpiLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : !kpiData || kpiData.length === 0 ? (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No KPI data available for this period. KPIs are computed automatically after uploading and mapping trial balance data.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>KPI</TableHead>
+                          <TableHead className="text-right">Current Period</TableHead>
+                          <TableHead className="text-right">Previous Period</TableHead>
+                          <TableHead className="text-right">Change</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {kpiData.map((kpi: any) => (
+                          <TableRow key={kpi.kpi_catalog?.code}>
+                            <TableCell className="font-medium">{kpi.kpi_catalog?.name}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {formatKPIValue(kpi.value, kpi.kpi_catalog?.display_format)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-muted-foreground">
+                              {formatKPIValue(kpi.previous_period_value, kpi.kpi_catalog?.display_format)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {kpi.change_percent !== null && kpi.change_percent !== undefined ? (
+                                <span
+                                  className={
+                                    kpi.change_percent > 0
+                                      ? "text-success"
+                                      : kpi.change_percent < 0
+                                      ? "text-destructive"
+                                      : "text-muted-foreground"
+                                  }
+                                >
+                                  {kpi.change_percent > 0 ? "+" : ""}{kpi.change_percent.toFixed(1)}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">N/A</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
