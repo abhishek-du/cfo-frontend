@@ -173,3 +173,31 @@ export const useUploadTrialBalance = () => {
     return data;
   };
 };
+
+export const useCreatePeriod = () => {
+  return async (
+    companyId: string,
+    periodData: {
+      label: string;
+      period_type: 'monthly' | 'quarterly' | 'annual';
+      start_date: string;
+      end_date: string;
+    }
+  ) => {
+    const { data, error } = await supabase
+      .from('periods')
+      .insert({
+        company_id: companyId,
+        label: periodData.label,
+        period_type: periodData.period_type,
+        start_date: periodData.start_date,
+        end_date: periodData.end_date,
+        is_closed: false,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  };
+};

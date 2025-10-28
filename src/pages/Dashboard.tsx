@@ -54,10 +54,13 @@ const Dashboard = () => {
               Overview of your financial performance
             </p>
           </div>
-          <PeriodSelector 
-            selectedPeriod={selectedPeriod} 
-            onPeriodChange={setSelectedPeriod} 
-          />
+          {periods && periods.length > 0 && (
+            <PeriodSelector 
+              selectedPeriod={selectedPeriod} 
+              onPeriodChange={setSelectedPeriod}
+              periods={periods}
+            />
+          )}
         </div>
 
         {/* Summary Tiles */}
