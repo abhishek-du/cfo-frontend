@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Search, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useCurrentUser, usePeriods, useMappedTrialBalance, useKPIValues } from "@/hooks/useFinancialData";
 
 const Reports = () => {
@@ -49,12 +50,13 @@ const Reports = () => {
   const handleExportTrialBalanceCSV = () => {
     if (!trialBalanceData || trialBalanceData.length === 0) return;
     
-    const headers = ["Standard Code", "Account Name", "Client Code", "Client Account Name", "Debit", "Credit", "Balance"];
+    const headers = ["Standard Code", "Account Name", "Client Code", "Client Account Name", "Mapping Status", "Debit", "Credit", "Balance"];
     const rows = filteredTrialBalance.map((row) => [
-      row.std_account_code,
-      row.std_account_name,
+      row.std_account_code || "Not Mapped",
+      row.std_account_name || "Not Mapped",
       row.client_account_code,
       row.client_account_name,
+      row.std_account_code ? "Mapped" : "Unmapped",
       row.total_debit?.toFixed(2) || "0.00",
       row.total_credit?.toFixed(2) || "0.00",
       row.net_balance?.toFixed(2) || "0.00",
@@ -228,9 +230,15 @@ const Reports = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredTrialBalance.map((row, idx) => (
-                          <TableRow key={`${row.std_account_code}-${idx}`}>
-                            <TableCell className="font-medium">{row.std_account_code}</TableCell>
-                            <TableCell>{row.std_account_name}</TableCell>
+                          <TableRow key={`${row.client_account_code}-${idx}`}>
+                            <TableCell className="font-medium">
+                              {row.std_account_code ? (
+                                row.std_account_code
+                              ) : (
+                                <Badge variant="outline" className="text-xs">Not Mapped</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>{row.std_account_name || "-"}</TableCell>
                             <TableCell className="text-muted-foreground">{row.client_account_code}</TableCell>
                             <TableCell className="text-muted-foreground">{row.client_account_name}</TableCell>
                             <TableCell className="text-right font-mono">

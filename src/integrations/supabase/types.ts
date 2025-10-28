@@ -74,6 +74,13 @@ export type Database = {
             foreignKeyName: "account_mappings_std_account_id_fkey"
             columns: ["std_account_id"]
             isOneToOne: false
+            referencedRelation: "v_mapped_trial_balance_detail"
+            referencedColumns: ["std_account_id"]
+          },
+          {
+            foreignKeyName: "account_mappings_std_account_id_fkey"
+            columns: ["std_account_id"]
+            isOneToOne: false
             referencedRelation: "v_period_account_totals"
             referencedColumns: ["std_account_id"]
           },
@@ -363,6 +370,13 @@ export type Database = {
             foreignKeyName: "period_summary_std_account_id_fkey"
             columns: ["std_account_id"]
             isOneToOne: false
+            referencedRelation: "v_mapped_trial_balance_detail"
+            referencedColumns: ["std_account_id"]
+          },
+          {
+            foreignKeyName: "period_summary_std_account_id_fkey"
+            columns: ["std_account_id"]
+            isOneToOne: false
             referencedRelation: "v_period_account_totals"
             referencedColumns: ["std_account_id"]
           },
@@ -450,6 +464,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "std_accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "std_accounts_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "v_mapped_trial_balance_detail"
+            referencedColumns: ["std_account_id"]
           },
           {
             foreignKeyName: "std_accounts_parent_id_fkey"
@@ -582,6 +603,37 @@ export type Database = {
       }
     }
     Views: {
+      v_mapped_trial_balance_detail: {
+        Row: {
+          category: Database["public"]["Enums"]["account_category"] | null
+          client_account_code: string | null
+          client_account_name: string | null
+          company_id: string | null
+          net_balance: number | null
+          period_id: string | null
+          std_account_code: string | null
+          std_account_id: string | null
+          std_account_name: string | null
+          total_credit: number | null
+          total_debit: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_balance_rows_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_balance_rows_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_period_account_totals: {
         Row: {
           category: Database["public"]["Enums"]["account_category"] | null
