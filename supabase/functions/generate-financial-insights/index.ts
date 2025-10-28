@@ -44,12 +44,12 @@ Deno.serve(async (req) => {
 
     if (kpisError) throw kpisError
 
-    // Prepare context for AI
+    // Prepare context for AI - convert to positive values for business interpretation
     const financialContext = {
-      revenue: summary.total_revenue,
-      cogs: summary.total_cogs,
-      opex: summary.total_opex,
-      netProfit: summary.net_profit,
+      revenue: Math.abs(summary.total_revenue || 0),
+      cogs: Math.abs(summary.total_cogs || 0),
+      opex: Math.abs(summary.total_opex || 0),
+      netProfit: summary.net_profit, // Keep as-is (can be negative)
       margin: summary.margin_percent,
       kpis: kpis?.map(k => ({
         name: (k.kpi_catalog as any).name,
@@ -62,9 +62,11 @@ Deno.serve(async (req) => {
 
     const prompt = `As a CFO advisor, analyze this financial data and provide 3-5 actionable insights:
 
-Revenue: $${financialContext.revenue?.toLocaleString() || 0}
-COGS: $${financialContext.cogs?.toLocaleString() || 0}
-Operating Expenses: $${financialContext.opex?.toLocaleString() || 0}
+NOTE: Revenue, COGS, and Operating Expenses are shown as POSITIVE amounts (standard business reporting format).
+
+Revenue: $${financialContext.revenue.toLocaleString()}
+COGS: $${financialContext.cogs.toLocaleString()}
+Operating Expenses: $${financialContext.opex.toLocaleString()}
 Net Profit: $${financialContext.netProfit?.toLocaleString() || 0}
 Margin: ${financialContext.margin}%
 
