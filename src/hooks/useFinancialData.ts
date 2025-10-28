@@ -34,12 +34,13 @@ export const useKPIValues = (companyId: string, periodId: string) => {
             name,
             category,
             description,
-            display_format
+            display_format,
+            sort_order
           )
         `)
         .eq('company_id', companyId)
         .eq('period_id', periodId)
-        .order('kpi_catalog(sort_order)');
+        .order('sort_order', { foreignTable: 'kpi_catalog' });
 
       if (error) throw error;
       return data;
