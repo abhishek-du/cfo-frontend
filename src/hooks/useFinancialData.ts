@@ -201,3 +201,167 @@ export const useCreatePeriod = () => {
     return data;
   };
 };
+
+export const useCompanyProfile = (companyId: string) => {
+  return useQuery({
+    queryKey: ['company-profile', companyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!companyId,
+  });
+};
+
+export const useUpdateCompany = () => {
+  return async (companyId: string, updates: { name?: string; industry?: string }) => {
+    const { data, error } = await supabase
+      .from('companies')
+      .update(updates)
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  };
+};
+
+export const useUnmappedAccounts = (companyId: string) => {
+  return useQuery({
+    queryKey: ['unmapped-accounts', companyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('trial_balance_rows')
+        .select('account_code, account_name')
+        .eq('company_id', companyId);
+
+      if (error) throw error;
+
+      // Get existing mappings
+      const { data: mappings } = await supabase
+        .from('account_mappings')
+        .select('client_account_code, client_account_name')
+        .eq('company_id', companyId);
+
+      // Filter out already mapped accounts
+      const mappedSet = new Set(
+        mappings?.map(m => `${m.client_account_code || ''}:${m.client_account_name}`) || []
+      );
+
+      const uniqueAccounts = data.reduce((acc, row) => {
+        const key = `${row.account_code || ''}:${row.account_name}`;
+        if (!mappedSet.has(key) && !acc.some(a => 
+          a.account_code === row.account_code && a.account_name === row.account_name
+        )) {
+          acc.push(row);
+        }
+        return acc;
+      }, [] as typeof data);
+
+      return uniqueAccounts;
+    },
+    enabled: !!companyId,
+  });
+};
+
+export const useMappedAccounts = (companyId: string) => {
+  return useQuery({
+    queryKey: ['mapped-accounts', companyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('account_mappings')
+        .select(`
+          id,
+          client_account_code,
+          client_account_name,
+          confidence_score,
+          std_account_id,
+          std_accounts (
+            code,
+            name,
+            category
+          )
+        `)
+        .eq('company_id', companyId)
+        .order('client_account_code');
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!companyId,
+  });
+};
+
+export const useStandardAccounts = () => {
+  return useQuery({
+    queryKey: ['standard-accounts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('std_accounts')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order');
+
+      if (error) throw error;
+      return data;
+    },
+  });
+};
+
+export const useCreateAccountMapping = () => {
+  return async (params: {
+    companyId: string;
+    clientAccountCode: string | null;
+    clientAccountName: string;
+    stdAccountId: string;
+    userId: string;
+  }) => {
+    const { data, error } = await supabase
+      .from('account_mappings')
+      .insert({
+        company_id: params.companyId,
+        client_account_code: params.clientAccountCode,
+        client_account_name: params.clientAccountName,
+        std_account_id: params.stdAccountId,
+        mapped_by: params.userId,
+        confidence_score: 1.0, // Manual mappings are 100% confident
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  };
+};
+
+export const useUpdateAccountMapping = () => {
+  return async (mappingId: string, stdAccountId: string) => {
+    const { data, error } = await supabase
+      .from('account_mappings')
+      .update({ std_account_id: stdAccountId })
+      .eq('id', mappingId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  };
+};
+
+export const useDeleteAccountMapping = () => {
+  return async (mappingId: string) => {
+    const { error } = await supabase
+      .from('account_mappings')
+      .delete()
+      .eq('id', mappingId);
+
+    if (error) throw error;
+  };
+};
