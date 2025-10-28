@@ -94,3 +94,82 @@ export const useGenerateInsights = () => {
     return data;
   };
 };
+
+export const useFileImports = (companyId: string) => {
+  return useQuery({
+    queryKey: ['file-imports', companyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('file_imports')
+        .select(`
+          id,
+          filename,
+          status,
+          total_rows,
+          successful_rows,
+          error_rows,
+          error_details,
+          created_at,
+          completed_at,
+          period_id,
+          periods (
+            label
+          )
+        `)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!companyId,
+  });
+};
+
+export const useUploadTrialBalance = () => {
+  return async (params: {
+    file: File;
+    periodId: string;
+    companyId: string;
+    userId: string;
+  }) => {
+    const { file, periodId, companyId, userId } = params;
+
+    // Read file content
+    const fileContent = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+
+    // Create import record
+    const { data: importRecord, error: importError } = await supabase
+      .from('file_imports')
+      .insert({
+        company_id: companyId,
+        period_id: periodId,
+        filename: file.name,
+        uploaded_by: userId,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (importError) throw importError;
+
+    // Call edge function
+    const { data, error } = await supabase.functions.invoke('process-trial-balance', {
+      body: {
+        fileContent,
+        periodId,
+        companyId,
+        importId: importRecord.id,
+        userId,
+      },
+    });
+
+    if (error) throw error;
+    return data;
+  };
+};
