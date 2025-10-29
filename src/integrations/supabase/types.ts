@@ -675,14 +675,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "trial_balance_rows_company_id_fkey"
+            foreignKeyName: "period_summary_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "trial_balance_rows_period_id_fkey"
+            foreignKeyName: "period_summary_period_id_fkey"
             columns: ["period_id"]
             isOneToOne: false
             referencedRelation: "periods"
