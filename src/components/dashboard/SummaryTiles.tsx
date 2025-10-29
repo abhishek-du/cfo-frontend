@@ -33,8 +33,8 @@ export const SummaryTiles = ({ companyId, periodId }: SummaryTilesProps) => {
 
   const totalRevenue = Math.abs(summary.total_revenue || 0);
   const totalCost = Math.abs(summary.total_cogs || 0) + Math.abs(summary.total_opex || 0);
-  const netProfit = summary.net_profit || 0;
-  const marginPercent = summary.margin_percent || 0;
+  const operatingProfit = totalRevenue - totalCost;
+  const operatingMargin = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
 
   const tiles = [
     {
@@ -49,12 +49,12 @@ export const SummaryTiles = ({ companyId, periodId }: SummaryTilesProps) => {
     },
     {
       title: "Profit / Loss",
-      value: `$${netProfit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      value: `$${operatingProfit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       change: 0,
     },
     {
       title: "Margin %",
-      value: `${marginPercent.toFixed(1)}%`,
+      value: `${operatingMargin.toFixed(1)}%`,
       change: 0,
     },
   ];
