@@ -31,30 +31,32 @@ export const SummaryTiles = ({ companyId, periodId }: SummaryTilesProps) => {
     );
   }
 
-  const totalRevenue = Math.abs(summary.total_revenue || 0);
-  const totalCost = Math.abs(summary.total_cogs || 0) + Math.abs(summary.total_opex || 0);
-  const operatingProfit = totalRevenue - totalCost;
-  const operatingMargin = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0;
+  const totalIncome = Math.abs(summary.total_revenue || 0) + Math.abs(summary.total_other_income || 0);
+  const totalExpenses = Math.abs(summary.total_cogs || 0) + 
+                        Math.abs(summary.total_opex || 0) + 
+                        Math.abs(summary.total_other_expense || 0);
+  const netProfit = summary.net_profit || 0;
+  const netMargin = summary.margin_percent || 0;
 
   const tiles = [
     {
-      title: "Total Revenue",
-      value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      title: "Total Income",
+      value: `$${totalIncome.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       change: 0,
     },
     {
-      title: "Total Cost",
-      value: `$${totalCost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      title: "Total Expenses",
+      value: `$${totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       change: 0,
     },
     {
-      title: "Profit / Loss",
-      value: `$${operatingProfit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      title: "Net Profit",
+      value: `$${netProfit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       change: 0,
     },
     {
-      title: "Margin %",
-      value: `${operatingMargin.toFixed(1)}%`,
+      title: "Net Margin %",
+      value: `${netMargin.toFixed(1)}%`,
       change: 0,
     },
   ];

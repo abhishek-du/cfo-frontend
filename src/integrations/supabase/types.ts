@@ -671,6 +671,8 @@ export type Database = {
           period_id: string | null
           total_cogs: number | null
           total_opex: number | null
+          total_other_expense: number | null
+          total_other_income: number | null
           total_revenue: number | null
         }
         Relationships: [
