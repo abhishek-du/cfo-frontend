@@ -404,3 +404,52 @@ export const useComputeKPIs = () => {
     },
   });
 };
+
+export const useProfitabilityTrend = (companyId: string) => {
+  return useQuery({
+    queryKey: ['profitability-trend', companyId],
+    queryFn: async () => {
+      const { data: periods } = await supabase
+        .from('periods')
+        .select('id, label, start_date')
+        .eq('company_id', companyId)
+        .order('start_date', { ascending: true });
+      
+      const { data: summaries } = await supabase
+        .from('v_revenue_cost_summary')
+        .select('period_id, net_profit, margin_percent')
+        .eq('company_id', companyId);
+      
+      return periods?.map(p => ({
+        month: p.label,
+        profit: summaries?.find(s => s.period_id === p.id)?.net_profit || 0,
+        margin: summaries?.find(s => s.period_id === p.id)?.margin_percent || 0
+      })) || [];
+    },
+    enabled: !!companyId
+  });
+};
+
+export const useRatioTrend = (companyId: string, kpiCode: string) => {
+  return useQuery({
+    queryKey: ['ratio-trend', companyId, kpiCode],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('kpi_values')
+        .select(`
+          value,
+          periods!inner(label, start_date),
+          kpi_catalog!inner(code)
+        `)
+        .eq('company_id', companyId)
+        .eq('kpi_catalog.code', kpiCode)
+        .order('periods(start_date)', { ascending: true });
+      
+      return data?.map(item => ({
+        month: item.periods.label,
+        value: item.value || 0
+      })) || [];
+    },
+    enabled: !!companyId && !!kpiCode
+  });
+};

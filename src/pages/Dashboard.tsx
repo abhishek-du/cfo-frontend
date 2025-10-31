@@ -78,8 +78,8 @@ const Dashboard = () => {
             
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ProfitabilityChart />
-              <RatioTrendChart />
+              <ProfitabilityChart companyId={companyId} />
+              <RatioTrendChart companyId={companyId} />
             </div>
           </div>
 
