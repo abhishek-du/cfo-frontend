@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { BarChart3 } from "lucide-react";
-import api from "@/api/client"; // Import the new API client
+import api from "@/api/client";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -24,78 +24,76 @@ const Login = () => {
       const response = await api.post("/auth/login", { email, password });
       const { user, access_token } = response.data;
       login(user, access_token);
-      toast.success("Welcome back!");
+
+      // FIXED: Correct toast usage
+      toast({
+        title: "Success",
+        description: "Welcome back!"
+      });
+
       navigate("/dashboard");
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || error.message || "Failed to sign in");
+      console.error("Login error:", error);
+      // FIXED: Correct toast usage
+      toast({
+        title: "Error",
+        description: error.response?.data?.detail || error.message || "Failed to sign in",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/20 to-background p-4">
-      <div className="w-full max-w-md">
-        <div className="flex items-center justify-center mb-8">
-          <BarChart3 className="h-10 w-10 text-primary mr-2" />
-          <h1 className="text-3xl font-bold text-foreground">Circular Vector</h1>
-        </div>
-        
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
-            <CardDescription>
-              Enter your email and password to access your dashboard
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link 
-                    to="/forgot-password" 
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter className="flex justify-center">
-            <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign up
-              </Link>
-            </p>
-          </CardFooter>
-        </Card>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1 flex flex-col items-center">
+          <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center mb-2">
+            <BarChart3 className="h-6 w-6 text-primary-foreground" />
+          </div>
+          <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
+          <CardDescription>
+            Enter your credentials to access your dashboard
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="john@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Sign in"}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <p className="text-sm text-muted-foreground">
+            Don't have an account?{" "}
+            <Link to="/signup" className="text-primary hover:underline">
+              Sign up
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
 };

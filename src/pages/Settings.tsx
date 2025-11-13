@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -165,17 +164,17 @@ const Settings = () => {
 
   if (userLoading || companyLoading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="space-y-6">
           <Skeleton className="h-12 w-64" />
           <Skeleton className="h-96 w-full" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Settings</h1>
@@ -402,7 +401,7 @@ const Settings = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

@@ -43,47 +43,33 @@ import {
 } from "@/hooks/useFinancialData";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+
 /**
  * Helper toast wrappers
- *
- * - We don't assume the exact type of `toast` from "@/hooks/use-toast".
- * - These helpers try common shapes safely and avoid TypeScript errors.
  */
 const notifySuccess = (message: string) => {
   const t: any = toast as any;
-  // 1) if toast is a function (common), call it with message
   if (typeof t === "function") {
     try {
-      t(message);
+      t({ title: "Success", description: message });
       return;
     } catch {
-      // continue to try other shapes
+      // ignore
     }
   }
-  // 2) if toast.success exists
   if (t && typeof t.success === "function") {
     t.success(message);
     return;
   }
-  // 3) if toast.show or toast.open exists with object signature
-  if (t && typeof t.show === "function") {
-    t.show({ message, type: "success" });
-    return;
-  }
-  if (t && typeof t.open === "function") {
-    t.open({ message, type: "success" });
-    return;
-  }
-  // last fallback
-  // eslint-disable-next-line no-console
   console.log("toast success:", message);
 };
+
 
 const notifyError = (message: string) => {
   const t: any = toast as any;
   if (typeof t === "function") {
     try {
-      t(message);
+      t({ title: "Error", description: message, variant: "destructive" });
       return;
     } catch {
       // ignore
@@ -93,17 +79,9 @@ const notifyError = (message: string) => {
     t.error(message);
     return;
   }
-  if (t && typeof t.show === "function") {
-    t.show({ message, type: "error" });
-    return;
-  }
-  if (t && typeof t.open === "function") {
-    t.open({ message, type: "error" });
-    return;
-  }
-  // eslint-disable-next-line no-console
   console.error("toast error:", message);
 };
+
 
 const steps = [
   {
@@ -136,23 +114,27 @@ const steps = [
   },
 ];
 
+
 const Onboarding = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
+
   const { data: userData, isLoading: userLoading } = useCurrentUser();
+
+  // ✅ FIX: Based on /me endpoint response structure
   const companyId = userData?.profile?.company_id;
   const userId = userData?.user?.id;
-  const updateCompany = useUpdateCompany();
 
+  const updateCompany = useUpdateCompany();
   const { data: periods, isLoading: periodsLoading } = usePeriods(companyId || "");
   const uploadTrialBalance = useUploadTrialBalance();
-
   const { data: unmappedAccounts, isLoading: unmappedLoading } = useUnmappedAccounts(
     companyId || ""
   );
   const { data: standardAccounts } = useStandardAccounts();
   const createMapping = useCreateAccountMapping();
+
 
   const [companyData, setCompanyData] = useState<{
     companyName: string;
@@ -164,26 +146,29 @@ const Onboarding = () => {
     fiscalYearEnd: undefined,
   });
 
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [selectedMappings, setSelectedMappings] = useState<Record<string, string>>({});
   const [savingMapping, setSavingMapping] = useState<string | null>(null);
 
+
+  // ✅ FIX: Load company data from userData.company.name
   useEffect(() => {
-    if (userData && userData.profile && userData.profile.company) {
+    if (userData?.company?.name) {
       setCompanyData((prev) => ({
         ...prev,
-        companyName: userData.profile.company.name || "",
-        industry: userData.profile.company.industry || undefined,
+        companyName: userData.company.name || "",
       }));
     }
   }, [userData]);
 
-  // safe defaults for arrays
+
   const periodsList = periods || [];
   const unmappedList = unmappedAccounts || [];
   const stdAccountsList = standardAccounts || [];
+
 
   useEffect(() => {
     if (periodsList.length > 0 && !selectedPeriod) {
@@ -191,11 +176,13 @@ const Onboarding = () => {
     }
   }, [periodsList, selectedPeriod]);
 
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
     }
   };
+
 
   const handleCompanySetup = async () => {
     if (!companyId) {
@@ -218,11 +205,13 @@ const Onboarding = () => {
       notifySuccess("Company details saved!");
       setCurrentStep((s) => s + 1);
     } catch (error: any) {
+      console.error("Company setup error:", error);
       notifyError(error?.message || "Failed to save company details");
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleUploadTrialBalance = async () => {
     if (!selectedFile || !selectedPeriod) {
@@ -255,6 +244,7 @@ const Onboarding = () => {
     }
   };
 
+
   const handleSaveMapping = async (accountCode: string | null, accountName: string) => {
     if (!companyId || !userId) return;
 
@@ -279,7 +269,6 @@ const Onboarding = () => {
 
       notifySuccess(`${accountName} mapped successfully!`);
 
-      // locally clear selection
       setSelectedMappings((prev) => {
         const newMappings = { ...prev };
         delete newMappings[key];
@@ -292,13 +281,13 @@ const Onboarding = () => {
     }
   };
 
+
   const handleContinue = () => {
     if (currentStep === 0) {
       handleCompanySetup();
     } else if (currentStep === 1) {
       handleUploadTrialBalance();
     } else if (currentStep === 2) {
-      // Allow moving forward - mapping should be saved individually
       setCurrentStep((s) => s + 1);
     } else if (currentStep < steps.length - 1) {
       setCurrentStep((s) => s + 1);
@@ -307,6 +296,7 @@ const Onboarding = () => {
     }
   };
 
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCompanyData({
       ...companyData,
@@ -314,7 +304,7 @@ const Onboarding = () => {
     });
   };
 
-  // group standard accounts by category for easier selection UI
+
   const groupedStandardAccounts: Record<string, Array<any>> = stdAccountsList.reduce(
     (acc: Record<string, any[]>, account: any) => {
       const cat = account?.category || "Other";
@@ -324,6 +314,7 @@ const Onboarding = () => {
     },
     {}
   );
+
 
   if (userLoading || periodsLoading) {
     return (
@@ -335,10 +326,10 @@ const Onboarding = () => {
     );
   }
 
+
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-8 py-8">
-        {/* Steps header */}
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold">Welcome — Let's get you set up</h1>
           <p className="text-sm text-muted-foreground">
@@ -346,7 +337,6 @@ const Onboarding = () => {
           </p>
         </div>
 
-        {/* Steps cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {steps.map((step) => {
             const isActive = step.id === currentStep;
@@ -377,7 +367,6 @@ const Onboarding = () => {
           })}
         </div>
 
-        {/* Main card for current step */}
         <Card className="p-8">
           <div className="space-y-6">
             <div className="text-center space-y-2">
@@ -385,7 +374,6 @@ const Onboarding = () => {
               <p className="text-muted-foreground">{steps[currentStep].description}</p>
             </div>
 
-            {/* Step content */}
             {currentStep === 0 ? (
               <div className="space-y-6 max-w-md mx-auto">
                 <div className="space-y-2">
@@ -435,7 +423,7 @@ const Onboarding = () => {
                     <SelectContent>
                       {periodsList.map((p: any) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.name}
+                          {p.name || p.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -548,7 +536,6 @@ const Onboarding = () => {
               </div>
             )}
 
-            {/* Controls */}
             <div className="flex justify-between">
               <Button
                 variant="outline"
@@ -574,5 +561,6 @@ const Onboarding = () => {
     </DashboardLayout>
   );
 };
+
 
 export default Onboarding;

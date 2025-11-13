@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -160,19 +159,19 @@ const Reports = () => {
 
   if (userLoading || periodsLoading) {
     return (
-      <DashboardLayout>
+      <>
         <div className="space-y-6">
           <Skeleton className="h-12 w-64" />
           <Skeleton className="h-96 w-full" />
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   const selectedPeriodLabel = periods?.find(p => p.id === selectedPeriod)?.label || "";
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -384,7 +383,7 @@ const Reports = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
+    </>
   );
 };
 

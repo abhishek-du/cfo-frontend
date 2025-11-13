@@ -19,21 +19,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export const AuthProvider = ({ children }: { ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (token) {
-      // The interceptor in client.ts will add the Authorization header
       api.get('/me')
         .then(response => {
-          setUser(response.data);
+          // ✅ FIXED: Transform /me response if needed
+          // If your backend /me returns the user directly:
+          setUser(response.data.user || response.data);
         })
         .catch(error => {
           console.error('Failed to fetch user with token', error);
-          localStorage.removeItem('access_token'); // Invalid token
+          localStorage.removeItem('access_token');
         })
         .finally(() => {
           setLoading(false);
