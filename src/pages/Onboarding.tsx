@@ -5,9 +5,105 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, Upload, Settings, BarChart3, Building2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  CheckCircle2,
+  Upload,
+  Settings,
+  BarChart3,
+  Building2,
+  Loader2,
+  FileText,
+  AlertCircle,
+} from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import {
+  useCurrentUser,
+  useUpdateCompany,
+  usePeriods,
+  useUploadTrialBalance,
+  useUnmappedAccounts,
+  useStandardAccounts,
+  useCreateAccountMapping,
+} from "@/hooks/useFinancialData";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+/**
+ * Helper toast wrappers
+ *
+ * - We don't assume the exact type of `toast` from "@/hooks/use-toast".
+ * - These helpers try common shapes safely and avoid TypeScript errors.
+ */
+const notifySuccess = (message: string) => {
+  const t: any = toast as any;
+  // 1) if toast is a function (common), call it with message
+  if (typeof t === "function") {
+    try {
+      t(message);
+      return;
+    } catch {
+      // continue to try other shapes
+    }
+  }
+  // 2) if toast.success exists
+  if (t && typeof t.success === "function") {
+    t.success(message);
+    return;
+  }
+  // 3) if toast.show or toast.open exists with object signature
+  if (t && typeof t.show === "function") {
+    t.show({ message, type: "success" });
+    return;
+  }
+  if (t && typeof t.open === "function") {
+    t.open({ message, type: "success" });
+    return;
+  }
+  // last fallback
+  // eslint-disable-next-line no-console
+  console.log("toast success:", message);
+};
+
+const notifyError = (message: string) => {
+  const t: any = toast as any;
+  if (typeof t === "function") {
+    try {
+      t(message);
+      return;
+    } catch {
+      // ignore
+    }
+  }
+  if (t && typeof t.error === "function") {
+    t.error(message);
+    return;
+  }
+  if (t && typeof t.show === "function") {
+    t.show({ message, type: "error" });
+    return;
+  }
+  if (t && typeof t.open === "function") {
+    t.open({ message, type: "error" });
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.error("toast error:", message);
+};
 
 const steps = [
   {
@@ -42,71 +138,170 @@ const steps = [
 
 const Onboarding = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [companyData, setCompanyData] = useState({
+  const [currentStep, setCurrentStep] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(false);
+  const { data: userData, isLoading: userLoading } = useCurrentUser();
+  const companyId = userData?.profile?.company_id;
+  const userId = userData?.user?.id;
+  const updateCompany = useUpdateCompany();
+
+  const { data: periods, isLoading: periodsLoading } = usePeriods(companyId || "");
+  const uploadTrialBalance = useUploadTrialBalance();
+
+  const { data: unmappedAccounts, isLoading: unmappedLoading } = useUnmappedAccounts(
+    companyId || ""
+  );
+  const { data: standardAccounts } = useStandardAccounts();
+  const createMapping = useCreateAccountMapping();
+
+  const [companyData, setCompanyData] = useState<{
+    companyName: string;
+    industry?: string;
+    fiscalYearEnd?: string;
+  }>({
     companyName: "",
-    industry: "",
-    fiscalYearEnd: "",
+    industry: undefined,
+    fiscalYearEnd: undefined,
   });
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("");
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [selectedMappings, setSelectedMappings] = useState<Record<string, string>>({});
+  const [savingMapping, setSavingMapping] = useState<string | null>(null);
+
   useEffect(() => {
-    // Fetch user's company ID on mount
-    const fetchCompanyId = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("user_profiles")
-          .select("company_id")
-          .eq("id", user.id)
-          .single();
-        
-        if (profile) {
-          setCompanyId(profile.company_id);
-        }
-      }
-    };
-    fetchCompanyId();
-  }, []);
+    if (userData && userData.profile && userData.profile.company) {
+      setCompanyData((prev) => ({
+        ...prev,
+        companyName: userData.profile.company.name || "",
+        industry: userData.profile.company.industry || undefined,
+      }));
+    }
+  }, [userData]);
+
+  // safe defaults for arrays
+  const periodsList = periods || [];
+  const unmappedList = unmappedAccounts || [];
+  const stdAccountsList = standardAccounts || [];
+
+  useEffect(() => {
+    if (periodsList.length > 0 && !selectedPeriod) {
+      setSelectedPeriod(periodsList[0].id ?? "");
+    }
+  }, [periodsList, selectedPeriod]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
 
   const handleCompanySetup = async () => {
     if (!companyId) {
-      toast.error("Company ID not found");
+      notifyError("Company ID not found");
       return;
     }
 
     if (!companyData.companyName.trim()) {
-      toast.error("Please enter your company name");
+      notifyError("Please enter your company name");
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("companies")
-        .update({
-          name: companyData.companyName,
-          industry: companyData.industry || null,
-        })
-        .eq("id", companyId);
+      await updateCompany(companyId, {
+        name: companyData.companyName.trim(),
+        industry: companyData.industry?.trim() || undefined,
+      });
 
-      if (error) throw error;
-
-      toast.success("Company details saved!");
-      setCurrentStep(currentStep + 1);
+      notifySuccess("Company details saved!");
+      setCurrentStep((s) => s + 1);
     } catch (error: any) {
-      toast.error(error.message || "Failed to save company details");
+      notifyError(error?.message || "Failed to save company details");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUploadTrialBalance = async () => {
+    if (!selectedFile || !selectedPeriod) {
+      notifyError("Please select a file and period before uploading.");
+      return;
+    }
+    if (!companyId || !userId) {
+      notifyError("Authentication error: Company ID or User ID not found.");
+      return;
+    }
+    if (!selectedFile.name.endsWith(".csv")) {
+      notifyError("Only CSV files are supported at this time.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await uploadTrialBalance({
+        file: selectedFile,
+        periodId: selectedPeriod,
+        companyId,
+        userId,
+      });
+      notifySuccess("Trial balance uploaded successfully!");
+      setCurrentStep((s) => s + 1);
+    } catch (error: any) {
+      notifyError(error?.response?.data?.detail || error?.message || "Failed to upload trial balance.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSaveMapping = async (accountCode: string | null, accountName: string) => {
+    if (!companyId || !userId) return;
+
+    const key = `${accountCode || ""}:${accountName}`;
+    const stdAccountId = selectedMappings[key];
+
+    if (!stdAccountId) {
+      notifyError("Please select a standard account to map to.");
+      return;
+    }
+
+    setSavingMapping(key);
+
+    try {
+      await createMapping({
+        companyId,
+        clientAccountCode: accountCode,
+        clientAccountName: accountName,
+        stdAccountId,
+        userId,
+      });
+
+      notifySuccess(`${accountName} mapped successfully!`);
+
+      // locally clear selection
+      setSelectedMappings((prev) => {
+        const newMappings = { ...prev };
+        delete newMappings[key];
+        return newMappings;
+      });
+    } catch (error: any) {
+      notifyError(error?.response?.data?.detail || error?.message || "Failed to save mapping.");
+    } finally {
+      setSavingMapping(null);
     }
   };
 
   const handleContinue = () => {
     if (currentStep === 0) {
       handleCompanySetup();
+    } else if (currentStep === 1) {
+      handleUploadTrialBalance();
+    } else if (currentStep === 2) {
+      // Allow moving forward - mapping should be saved individually
+      setCurrentStep((s) => s + 1);
     } else if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+      setCurrentStep((s) => s + 1);
     } else {
       navigate("/dashboard");
     }
@@ -119,65 +314,62 @@ const Onboarding = () => {
     });
   };
 
+  // group standard accounts by category for easier selection UI
+  const groupedStandardAccounts: Record<string, Array<any>> = stdAccountsList.reduce(
+    (acc: Record<string, any[]>, account: any) => {
+      const cat = account?.category || "Other";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(account);
+      return acc;
+    },
+    {}
+  );
+
+  if (userLoading || periodsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-8 py-8">
+        {/* Steps header */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-foreground">Welcome to Circular Vector</h1>
-          <p className="text-muted-foreground">
-            Let's get your account set up in a few simple steps
+          <h1 className="text-2xl font-bold">Welcome — Let's get you set up</h1>
+          <p className="text-sm text-muted-foreground">
+            We'll walk you through company setup, uploading trial balance, mapping accounts and viewing KPIs.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {steps.map((step, index) => {
+        {/* Steps cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {steps.map((step) => {
+            const isActive = step.id === currentStep;
+            const isCompleted = step.id < currentStep;
             const Icon = step.icon;
-            const isActive = index === currentStep;
-            const isCompleted = index < currentStep;
-
             return (
-              <Card
-                key={step.id}
-                className={`p-6 transition-all ${
-                  isActive
-                    ? "ring-2 ring-primary shadow-lg"
-                    : isCompleted
-                    ? "bg-success/5 border-success"
-                    : ""
-                }`}
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isCompleted
-                          ? "bg-success text-white"
-                          : isActive
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {isCompleted ? (
-                        <CheckCircle2 className="h-6 w-6" />
-                      ) : (
-                        <Icon className="h-6 w-6" />
-                      )}
-                    </div>
-                    <span
-                      className={`text-sm font-medium ${
-                        isActive
-                          ? "text-primary"
-                          : isCompleted
-                       ? "text-success"
-                       : "text-muted-foreground"
-                     }`}
-                   >
-                     Step {step.id + 1}
-                   </span>
-                  </div>
+              <Card key={step.id} className={`p-4 ${isActive ? "ring-2 ring-primary" : ""}`}>
+                <div className="flex items-start space-x-3">
                   <div>
-                    <h3 className="font-semibold text-foreground mb-1">{step.title}</h3>
-                    <p className="text-sm text-muted-foreground">{step.description}</p>
+                    <div className="h-10 w-10 rounded-md flex items-center justify-center bg-muted">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-foreground">{step.title}</h3>
+                        <p className="text-sm text-muted-foreground">{step.description}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {isCompleted ? <Badge>Done</Badge> : isActive ? <Badge>In progress</Badge> : null}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -185,6 +377,7 @@ const Onboarding = () => {
           })}
         </div>
 
+        {/* Main card for current step */}
         <Card className="p-8">
           <div className="space-y-6">
             <div className="text-center space-y-2">
@@ -192,6 +385,7 @@ const Onboarding = () => {
               <p className="text-muted-foreground">{steps[currentStep].description}</p>
             </div>
 
+            {/* Step content */}
             {currentStep === 0 ? (
               <div className="space-y-6 max-w-md mx-auto">
                 <div className="space-y-2">
@@ -214,7 +408,7 @@ const Onboarding = () => {
                     name="industry"
                     type="text"
                     placeholder="Technology"
-                    value={companyData.industry}
+                    value={companyData.industry ?? ""}
                     onChange={handleChange}
                   />
                 </div>
@@ -225,35 +419,154 @@ const Onboarding = () => {
                     id="fiscalYearEnd"
                     name="fiscalYearEnd"
                     type="date"
-                    value={companyData.fiscalYearEnd}
+                    value={companyData.fiscalYearEnd ?? ""}
                     onChange={handleChange}
                   />
                 </div>
+              </div>
+            ) : currentStep === 1 ? (
+              <div className="space-y-6 max-w-md mx-auto">
+                <div className="space-y-2">
+                  <Label>Choose Period</Label>
+                  <Select onValueChange={(v) => setSelectedPeriod(v)} value={selectedPeriod}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {periodsList.map((p: any) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Upload CSV Trial Balance</Label>
+                  <input type="file" accept=".csv" onChange={handleFileChange} />
+                  {selectedFile ? (
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4" />
+                      <span className="text-sm">{selectedFile.name}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : currentStep === 2 ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Unmapped Accounts</h3>
+                  <div className="text-sm text-muted-foreground">
+                    {unmappedLoading ? "Loading..." : `${unmappedList.length || 0} accounts`}
+                  </div>
+                </div>
+
+                {unmappedLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : unmappedList && unmappedList.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Account Code</TableHead>
+                        <TableHead>Account Name</TableHead>
+                        <TableHead>Map To (Standard)</TableHead>
+                        <TableHead>Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unmappedList.map((acc: any) => {
+                        const key = `${acc.code || ""}:${acc.name}`;
+                        return (
+                          <TableRow key={key}>
+                            <TableCell>{acc.code || <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell>{acc.name}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={selectedMappings[key] || ""}
+                                onValueChange={(v) =>
+                                  setSelectedMappings((prev) => ({ ...prev, [key]: v }))
+                                }
+                              >
+                                <SelectTrigger className="w-72">
+                                  <SelectValue placeholder="Select standard account" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Object.keys(groupedStandardAccounts).map((cat) => (
+                                    <div key={cat}>
+                                      <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">
+                                        {cat}
+                                      </div>
+                                      {groupedStandardAccounts[cat].map((std: any) => (
+                                        <SelectItem key={std.id} value={std.id}>
+                                          {std.code ? `${std.code} — ${std.name}` : std.name}
+                                        </SelectItem>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveMapping(acc.code || null, acc.name)}
+                                disabled={savingMapping === key}
+                              >
+                                {savingMapping === key ? "Saving..." : "Save"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <Alert>
+                    <div className="flex items-start space-x-2">
+                      <AlertCircle className="h-5 w-5" />
+                      <AlertDescription>
+                        No unmapped accounts found. If you've uploaded a trial balance, give the system a
+                        moment to process or check the upload step.
+                      </AlertDescription>
+                    </div>
+                  </Alert>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
                 <div className="text-center space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    This is a placeholder for the {steps[currentStep].title.toLowerCase()} step.
+                    Your onboarding is complete — go check your dashboard for KPIs and insights.
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    In the full version, you'll be able to complete this step here.
-                  </p>
+                  <div className="pt-4">
+                    <Button onClick={() => navigate("/dashboard")}>Go to Dashboard</Button>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Controls */}
             <div className="flex justify-between">
               <Button
                 variant="outline"
                 onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-                disabled={currentStep === 0}
+                disabled={currentStep === 0 || loading || isUploading}
               >
                 Previous
               </Button>
-              <Button onClick={handleContinue} disabled={loading}>
-                {loading ? "Saving..." : currentStep === steps.length - 1 ? "Go to Dashboard" : "Continue"}
-              </Button>
+
+              <div className="flex space-x-2">
+                <Button onClick={handleContinue} disabled={loading || isUploading}>
+                  {loading || isUploading
+                    ? "Working..."
+                    : currentStep === steps.length - 1
+                      ? "Go to Dashboard"
+                      : "Continue"}
+                </Button>
+              </div>
             </div>
           </div>
         </Card>

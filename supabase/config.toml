@@ -1,7 +1,0 @@
-project_id = "ikfvgpgqykprmflramem"
-
-[functions.process-trial-balance]
-verify_jwt = false
-
-[functions.generate-financial-insights]
-verify_jwt = false

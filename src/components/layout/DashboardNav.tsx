@@ -9,9 +9,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BarChart3, LayoutDashboard, FileText, Upload, Settings, User, LogOut, Shield } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/useUserRole";
+import api from "@/api/client"; // Import the new API client
 
 export const DashboardNav = () => {
   const navigate = useNavigate();
@@ -19,9 +19,17 @@ export const DashboardNav = () => {
   const { isAdmin } = useUserRole();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast.success("Signed out successfully");
-    navigate("/login");
+    try {
+      // Assuming a logout endpoint exists in FastAPI to invalidate tokens/sessions
+      await api.post("/auth/logout"); 
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Continue with client-side logout even if backend logout fails
+    } finally {
+      localStorage.removeItem("access_token"); // Remove token from local storage
+      toast.success("Signed out successfully");
+      navigate("/login");
+    }
   };
 
   const navItems = [

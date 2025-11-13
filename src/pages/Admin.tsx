@@ -9,7 +9,7 @@ import { Plus, Edit } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 const Admin = () => {
   const { isAdmin, isLoading } = useUserRole();

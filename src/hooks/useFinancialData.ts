@@ -1,127 +1,205 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/api/client"; 
+import { AxiosError } from "axios";
+
+// Define general interfaces for API data
+interface Period {
+  id: string;
+  label: string;
+  name?: string; // Optional, as per normalizePeriods logic
+  start_date: string;
+  end_date: string;
+}
+
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  company_id: string;
+  company_name: string;
+  roles: string[];
+}
+
+interface CurrentUserResponse {
+  user: { id: string; email: string };
+  profile: Omit<UserProfile, 'id' | 'email'>;
+  company: { name: string };
+}
+
+interface FinancialSummary {
+  net_profit: number;
+  margin_percent: number;
+  period_id: string; // Added for useProfitabilityTrend
+  // Add other properties as they appear in the /trial-balance/summary endpoint
+}
+
+interface KpiValue {
+  id: string;
+  kpi_code: string;
+  value: number;
+  period_id: string;
+  company_id: string;
+  // Add other properties as they appear in the /kpi/values endpoint
+}
+
+interface FileImport {
+  id: string;
+  filename: string;
+  status: string;
+  imported_at: string;
+  // Add other properties as they appear in the /file-imports endpoint
+}
+
+interface UnmappedAccount {
+  client_account_code: string | null;
+  client_account_name: string;
+  // Add other properties as they appear in the /trial-balance/unmapped-accounts endpoint
+}
+
+interface AccountMapping {
+  id: string;
+  client_account_code: string | null;
+  client_account_name: string;
+  std_account_id: string;
+  mapped_by: string;
+  confidence_score: number;
+  // Add any other properties for mappings
+}
+
+interface StandardAccount {
+  id: string;
+  name: string;
+  description: string;
+  // Add any other properties for standard accounts
+}
+
+interface MappedTrialBalanceEntry {
+  // Define structure of mapped trial balance entries
+  [key: string]: any; // Use a more specific type if known
+}
+
+interface APIError {
+  detail: string;
+}
+
+// Specific response types for previously 'any' returns
+interface InsightResponse {
+  insight: string;
+  // Add other properties if known
+}
+
+interface UploadResponse {
+  message: string;
+  id?: string; // Assuming an ID might be returned for the uploaded resource
+}
+
+interface ComputeKpiResponse {
+  message: string;
+  status: string; // Or a more specific status type
+}
+
+interface RatioTrendEntry {
+  period_id: string;
+  kpi_code: string;
+  value: number;
+  // Add other properties if known
+}
+
+// small helper near top of file
+const normalizePeriods = (periods: Period[]): Period[] => {
+  return (periods || []).map(p => ({
+    id: p.id,
+    label: p.label ?? p.name ?? p.label,
+    start_date: p.start_date,
+    end_date: p.end_date,
+  }));
+};
 
 export const useFinancialSummary = (companyId: string, periodId: string) => {
-  return useQuery({
+  return useQuery<FinancialSummary, AxiosError<APIError>>({
     queryKey: ['financial-summary', companyId, periodId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('v_revenue_cost_summary')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('period_id', periodId)
-        .single();
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/trial-balance/summary?company_id=${companyId}&period_id=${periodId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId && !!periodId,
   });
 };
 
 export const useKPIValues = (companyId: string, periodId: string) => {
-  return useQuery({
+  return useQuery<KpiValue[], AxiosError<APIError>>({
     queryKey: ['kpi-values', companyId, periodId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('kpi_values')
-        .select(`
-          value,
-          previous_period_value,
-          change_percent,
-          kpi_catalog (
-            code,
-            name,
-            category,
-            description,
-            display_format,
-            sort_order
-          )
-        `)
-        .eq('company_id', companyId)
-        .eq('period_id', periodId)
-        .order('sort_order', { foreignTable: 'kpi_catalog' });
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/kpi/values?company_id=${companyId}&period_id=${periodId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId && !!periodId,
   });
 };
 
 export const usePeriods = (companyId: string) => {
-  return useQuery({
+  return useQuery<Period[], AxiosError<APIError>>({
     queryKey: ['periods', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('periods')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('start_date', { ascending: false });
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/periods?company_id=${companyId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId,
   });
 };
 
 export const useCurrentUser = () => {
-  return useQuery({
+  return useQuery<UserProfile, AxiosError<APIError>>({
     queryKey: ['current-user'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*, companies(*)')
-        .eq('id', user.id)
-        .single();
-
-      if (error) throw error;
-      return { user, profile };
+      try {
+        const response = await api.get<CurrentUserResponse>('/me');
+        const { user, profile, company } = response.data;
+        if (!user) throw new Error('Not authenticated');
+        return { ...user, ...profile, company_name: company.name };
+      } catch (error) {
+        if ((error as AxiosError<APIError>).response?.status === 401 || (error as AxiosError<APIError>).response?.status === 404) {
+          throw new Error('Not authenticated');
+        }
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
   });
 };
 
 export const useGenerateInsights = () => {
-  return async (companyId: string, periodId: string) => {
-    const { data, error } = await supabase.functions.invoke('generate-financial-insights', {
-      body: { companyId, periodId }
-    });
-
-    if (error) throw error;
-    return data;
+  return async (companyId: string, periodId: string): Promise<InsightResponse> => {
+    try {
+      const response = await api.post(`/ai/insights`, { company_id: companyId, period_id: periodId });
+      return response.data;
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
 export const useFileImports = (companyId: string) => {
-  return useQuery({
+  return useQuery<FileImport[], AxiosError<APIError>>({
     queryKey: ['file-imports', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('file_imports')
-        .select(`
-          id,
-          filename,
-          status,
-          total_rows,
-          successful_rows,
-          error_rows,
-          error_details,
-          created_at,
-          completed_at,
-          period_id,
-          periods (
-            label
-          )
-        `)
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/file-imports?company_id=${companyId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId,
   });
@@ -133,45 +211,23 @@ export const useUploadTrialBalance = () => {
     periodId: string;
     companyId: string;
     userId: string;
-  }) => {
+  }): Promise<UploadResponse> => {
     const { file, periodId, companyId, userId } = params;
 
-    // Read file content
-    const fileContent = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.onerror = reject;
-      reader.readAsText(file);
-    });
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("company_id", companyId);
+    fd.append("period_id", periodId);
+    fd.append("user_id", userId);
 
-    // Create import record
-    const { data: importRecord, error: importError } = await supabase
-      .from('file_imports')
-      .insert({
-        company_id: companyId,
-        period_id: periodId,
-        filename: file.name,
-        uploaded_by: userId,
-        status: 'pending',
-      })
-      .select()
-      .single();
-
-    if (importError) throw importError;
-
-    // Call edge function
-    const { data, error } = await supabase.functions.invoke('process-trial-balance', {
-      body: {
-        fileContent,
-        periodId,
-        companyId,
-        importId: importRecord.id,
-        userId,
-      },
-    });
-
-    if (error) throw error;
-    return data;
+    try {
+      const response = await api.post("/uploads/trial-balance", fd, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      return response.data;
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
@@ -184,134 +240,103 @@ export const useCreatePeriod = () => {
       start_date: string;
       end_date: string;
     }
-  ) => {
-    const { data, error } = await supabase
-      .from('periods')
-      .insert({
-        company_id: companyId,
-        label: periodData.label,
-        period_type: periodData.period_type,
-        start_date: periodData.start_date,
-        end_date: periodData.end_date,
-        is_closed: false,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+  ): Promise<Period> => {
+    try {
+      const response = await api.post(`/periods`, { ...periodData, company_id: companyId });
+      return response.data;
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
 export const useCompanyProfile = (companyId: string) => {
-  return useQuery({
+  return useQuery<UserProfile, AxiosError<APIError>>({ // Assuming UserProfile can also serve as CompanyProfile with slight adjustment
     queryKey: ['company-profile', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', companyId)
-        .single();
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/companies/${companyId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId,
   });
 };
 
 export const useUpdateCompany = () => {
-  return async (companyId: string, updates: { name?: string; industry?: string }) => {
-    const { data, error } = await supabase
-      .from('companies')
-      .update(updates)
-      .eq('id', companyId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+  return async (companyId: string, updates: { name?: string; industry?: string }): Promise<UserProfile> => {
+    try {
+      const response = await api.put(`/companies/${companyId}`, updates);
+      return response.data;
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
 export const useUnmappedAccounts = (companyId: string) => {
-  return useQuery({
+  return useQuery<UnmappedAccount[], AxiosError<APIError>>({
     queryKey: ['unmapped-accounts', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('trial_balance_rows')
-        .select('account_code, account_name')
-        .eq('company_id', companyId);
+      try {
+        const [unmappedResponse, mappingsResponse] = await Promise.all([
+          api.get<UnmappedAccount[]>(`/trial-balance/unmapped-accounts?company_id=${companyId}`),
+          api.get<AccountMapping[]>(`/mappings?company_id=${companyId}`)
+        ]);
 
-      if (error) throw error;
+        const data = unmappedResponse.data;
+        const mappings = mappingsResponse.data;
 
-      // Get existing mappings
-      const { data: mappings } = await supabase
-        .from('account_mappings')
-        .select('client_account_code, client_account_name')
-        .eq('company_id', companyId);
+        const mappedSet = new Set(
+          mappings?.map((m: AccountMapping) => `${m.client_account_code || ''}:${m.client_account_name}`) || []
+        );
 
-      // Filter out already mapped accounts
-      const mappedSet = new Set(
-        mappings?.map(m => `${m.client_account_code || ''}:${m.client_account_name}`) || []
-      );
+        const uniqueAccounts = data.reduce((acc: UnmappedAccount[], row: UnmappedAccount) => {
+          const key = `${row.client_account_code || ''}:${row.client_account_name}`;
+          if (!mappedSet.has(key) && !acc.some(a => 
+            a.client_account_code === row.client_account_code && a.client_account_name === row.client_account_name
+          )) {
+            acc.push(row);
+          }
+          return acc;
+        }, []);
 
-      const uniqueAccounts = data.reduce((acc, row) => {
-        const key = `${row.account_code || ''}:${row.account_name}`;
-        if (!mappedSet.has(key) && !acc.some(a => 
-          a.account_code === row.account_code && a.account_name === row.account_name
-        )) {
-          acc.push(row);
-        }
-        return acc;
-      }, [] as typeof data);
-
-      return uniqueAccounts;
+        return uniqueAccounts;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId,
   });
 };
 
 export const useMappedAccounts = (companyId: string) => {
-  return useQuery({
+  return useQuery<AccountMapping[], AxiosError<APIError>>({
     queryKey: ['mapped-accounts', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('account_mappings')
-        .select(`
-          id,
-          client_account_code,
-          client_account_name,
-          confidence_score,
-          std_account_id,
-          std_accounts (
-            code,
-            name,
-            category
-          )
-        `)
-        .eq('company_id', companyId)
-        .order('client_account_code');
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/mappings?company_id=${companyId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId,
   });
 };
 
 export const useStandardAccounts = () => {
-  return useQuery({
+  return useQuery<StandardAccount[], AxiosError<APIError>>({
     queryKey: ['standard-accounts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('std_accounts')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order');
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/standard-accounts`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
   });
 };
@@ -323,62 +348,54 @@ export const useCreateAccountMapping = () => {
     clientAccountName: string;
     stdAccountId: string;
     userId: string;
-  }) => {
-    const { data, error } = await supabase
-      .from('account_mappings')
-      .insert({
+  }): Promise<AccountMapping> => {
+    try {
+      const response = await api.post(`/mappings`, {
         company_id: params.companyId,
         client_account_code: params.clientAccountCode,
         client_account_name: params.clientAccountName,
         std_account_id: params.stdAccountId,
         mapped_by: params.userId,
         confidence_score: 1.0, // Manual mappings are 100% confident
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+      });
+      return response.data;
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
 export const useUpdateAccountMapping = () => {
-  return async (mappingId: string, stdAccountId: string) => {
-    const { data, error } = await supabase
-      .from('account_mappings')
-      .update({ std_account_id: stdAccountId })
-      .eq('id', mappingId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+  return async (mappingId: string, stdAccountId: string): Promise<AccountMapping> => {
+    try {
+      const response = await api.put(`/mappings/${mappingId}`, { std_account_id: stdAccountId });
+      return response.data;
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
 export const useDeleteAccountMapping = () => {
-  return async (mappingId: string) => {
-    const { error } = await supabase
-      .from('account_mappings')
-      .delete()
-      .eq('id', mappingId);
-
-    if (error) throw error;
+  return async (mappingId: string): Promise<void> => {
+    try {
+      await api.delete(`/mappings/${mappingId}`);
+    } catch (error) {
+      throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+    }
   };
 };
 
 export const useMappedTrialBalance = (companyId: string, periodId: string) => {
-  return useQuery({
+  return useQuery<MappedTrialBalanceEntry[], AxiosError<APIError>>({
     queryKey: ['mapped-trial-balance', companyId, periodId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('v_mapped_trial_balance_detail')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('period_id', periodId);
-
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get(`/trial-balance/mapped-detail?company_id=${companyId}&period_id=${periodId}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId && !!periodId,
   });
@@ -387,16 +404,15 @@ export const useMappedTrialBalance = (companyId: string, periodId: string) => {
 export const useComputeKPIs = () => {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({ companyId, periodId }: { companyId: string; periodId: string }) => {
-      const { data, error } = await supabase.functions.invoke('compute-period-kpis', {
-        body: { companyId, periodId },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      
-      return data;
+  return useMutation<ComputeKpiResponse, AxiosError<APIError>, { companyId: string; periodId: string }> ({
+    mutationFn: async ({ companyId, periodId }) => {
+      try {
+        const response = await api.post(`/kpi/compute`, { company_id: companyId, period_id: periodId });
+        if (response.data?.error) throw new Error(response.data.error);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kpi-values'] });
@@ -406,49 +422,42 @@ export const useComputeKPIs = () => {
 };
 
 export const useProfitabilityTrend = (companyId: string) => {
-  return useQuery({
+  return useQuery<{ month: string; profit: number; margin: number }[], AxiosError<APIError>>({
     queryKey: ['profitability-trend', companyId],
     queryFn: async () => {
-      const { data: periods } = await supabase
-        .from('periods')
-        .select('id, label, start_date')
-        .eq('company_id', companyId)
-        .order('start_date', { ascending: true });
+      try {
+        const [periodsResponse, summariesResponse] = await Promise.all([
+          api.get<Period[]>(`/periods?company_id=${companyId}`),
+          api.get<FinancialSummary[]>(`/trial-balance/summary-all-periods?company_id=${companyId}`) 
+        ]);
+
+        const periods = periodsResponse.data;
+        const summaries = summariesResponse.data;
       
-      const { data: summaries } = await supabase
-        .from('v_revenue_cost_summary')
-        .select('period_id, net_profit, margin_percent')
-        .eq('company_id', companyId);
-      
-      return periods?.map(p => ({
-        month: p.label,
-        profit: summaries?.find(s => s.period_id === p.id)?.net_profit || 0,
-        margin: summaries?.find(s => s.period_id === p.id)?.margin_percent || 0
-      })) || [];
+        return periods?.map((p: Period) => ({
+          month: p.label,
+          profit: summaries?.find((s:FinancialSummary) => s.period_id === p.id)?.net_profit || 0,
+          margin: summaries?.find((s:FinancialSummary) => s.period_id === p.id)?.margin_percent || 0
+        })) || [];
+      }
+       catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId
   });
 };
 
 export const useRatioTrend = (companyId: string, kpiCode: string) => {
-  return useQuery({
+  return useQuery<RatioTrendEntry[], AxiosError<APIError>>({
     queryKey: ['ratio-trend', companyId, kpiCode],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('kpi_values')
-        .select(`
-          value,
-          periods!inner(label, start_date),
-          kpi_catalog!inner(code)
-        `)
-        .eq('company_id', companyId)
-        .eq('kpi_catalog.code', kpiCode)
-        .order('periods(start_date)', { ascending: true });
-      
-      return data?.map(item => ({
-        month: item.periods.label,
-        value: item.value || 0
-      })) || [];
+      try {
+        const response = await api.get(`/kpi/trend?company_id=${companyId}&kpi_code=${kpiCode}`);
+        return response.data;
+      } catch (error) {
+        throw (error as AxiosError<APIError>).response?.data?.detail || (error as Error).message;
+      }
     },
     enabled: !!companyId && !!kpiCode
   });

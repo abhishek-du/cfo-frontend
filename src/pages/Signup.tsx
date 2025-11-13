@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { BarChart3 } from "lucide-react";
+import api from "@/api/client"; // Import the new API client
 
 const Signup = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -23,30 +25,18 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      const redirectUrl = `${window.location.origin}/onboarding`;
-      
-      // Create auth user - trigger will handle company and profile creation
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const response = await api.post("/auth/signup", {
         email: formData.email,
         password: formData.password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            full_name: formData.fullName,
-          },
-        },
+        full_name: formData.fullName,
       });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("User creation failed");
-
-      toast.success("Account created! Please check your email to verify your account.");
-      
-      // User will be redirected to /onboarding after clicking the email verification link
-
+      const { user, access_token } = response.data;
+      login(user, access_token);
+      toast.success("Account created! Welcome!");
+      navigate("/onboarding");
     } catch (error: any) {
       console.error("Signup error:", error);
-      toast.error(error.message || "Failed to create account");
+      toast.error(error.response?.data?.detail || error.message || "Failed to create account");
     } finally {
       setLoading(false);
     }

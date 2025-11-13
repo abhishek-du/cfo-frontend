@@ -1,0 +1,231 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Added Table components
+import { Badge } from "@/components/ui/badge"; // Added Badge
+import { CheckCircle2, Upload, Settings, BarChart3, Building2, Loader2, FileText, AlertCircle } from "lucide-react"; // Added AlertCircle
+import { toast } from "sonner";
+import { useCurrentUser, useUpdateCompany, usePeriods, useUploadTrialBalance, useUnmappedAccounts, useStandardAccounts, useCreateAccountMapping } from "@/hooks/useFinancialData"; // Added useUnmappedAccounts, useStandardAccounts, useCreateAccountMapping
+import { Alert, AlertDescription } from "@/components/ui/alert"; // Added Alert
+
+const steps = [
+  {
+    id: 0,
+    title: "Company Setup",
+    description: "Tell us about your company",
+    icon: Building2,
+    completed: false,
+  },
+  {
+    id: 1,
+    title: "Upload Trial Balance",
+    description: "Import your trial balance data to get started",
+    icon: Upload,
+    completed: false,
+  },
+  {
+    id: 2,
+    title: "Review Mapping",
+    description: "Map your accounts to our standard chart",
+    icon: Settings,
+    completed: false,
+  },
+  {
+    id: 3,
+    title: "View KPIs",
+    description: "See your financial insights and metrics",
+    icon: BarChart3,
+    completed: false,
+  },
+];
+
+const Onboarding = () => {
+  const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const { data: userData, isLoading: userLoading } = useCurrentUser();
+  const companyId = userData?.profile?.company_id;
+  const userId = userData?.user?.id;
+  const updateCompany = useUpdateCompany();
+
+  const { data: periods, isLoading: periodsLoading } = usePeriods(companyId || '');
+  const uploadTrialBalance = useUploadTrialBalance();
+
+  const { data: unmappedAccounts, isLoading: unmappedLoading } = useUnmappedAccounts(companyId || ''); // Fetch unmapped accounts
+  const { data: standardAccounts } = useStandardAccounts(); // Fetch standard accounts
+  const createMapping = useCreateAccountMapping(); // Get create mapping mutation
+
+  const [companyData, setCompanyData] = useState({
+    companyName: "",
+    industry: "",
+    fiscalYearEnd: "",
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedMappings, setSelectedMappings] = useState<Record<string, string>>({}); // State for selected mappings
+  const [savingMapping, setSavingMapping] = useState<string | null>(null); // State for saving mapping loading
+
+  useEffect(() => {
+    if (userData && userData.profile && userData.profile.company) {
+      setCompanyData(prev => ({
+        ...prev,
+        companyName: userData.profile.company.name || "",
+        industry: userData.profile.company.industry || "",
+      }));
+    }
+  }, [userData]);
+
+  useEffect(() => {
+    if (periods && periods.length > 0 && !selectedPeriod) {
+      setSelectedPeriod(periods[0].id);
+    }
+  }, [periods, selectedPeriod]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleCompanySetup = async () => {
+    if (!companyId) {
+      toast.error("Company ID not found");
+      return;
+    }
+
+    if (!companyData.companyName.trim()) {
+      toast.error("Please enter your company name");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await updateCompany(companyId, {
+        name: companyData.companyName,
+        industry: companyData.industry || null,
+      });
+
+      toast.success("Company details saved!");
+      setCurrentStep(currentStep + 1);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save company details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadTrialBalance = async () => {
+    if (!selectedFile || !selectedPeriod) {
+      toast.error("Please select a file and period before uploading.");
+      return;
+    }
+    if (!companyId || !userId) {
+      toast.error("Authentication error: Company ID or User ID not found.");
+      return;
+    }
+    if (!selectedFile.name.endsWith('.csv')) {
+      toast.error("Only CSV files are supported at this time.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await uploadTrialBalance({
+        file: selectedFile,
+        periodId: selectedPeriod,
+        companyId,
+        userId,
+      });
+      toast.success("Trial balance uploaded successfully!");
+      setCurrentStep(currentStep + 1);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || error.message || "Failed to upload trial balance.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSaveMapping = async (accountCode: string | null, accountName: string) => {
+    if (!companyId || !userId) return;
+    
+    const key = `${accountCode || ''}:${accountName}`;
+    const stdAccountId = selectedMappings[key];
+    
+    if (!stdAccountId) {
+      toast.error("Please select a standard account to map to.");
+      return;
+    }
+
+    setSavingMapping(key);
+    
+    try {
+      await createMapping({
+        companyId,
+        clientAccountCode: accountCode,
+        clientAccountName: accountName,
+        stdAccountId,
+        userId,
+      });
+      
+      toast.success(`${accountName} mapped successfully!`);
+      
+      // Remove from unmapped list locally or refetch
+      // For simplicity, we'll just clear the selection here
+      setSelectedMappings(prev => {
+        const newMappings = { ...prev };
+        delete newMappings[key];
+        return newMappings;
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || error.message || "Failed to save mapping.");
+    } finally {
+      setSavingMapping(null);
+    }
+  };
+
+  const handleContinue = () => {
+    if (currentStep === 0) {
+      handleCompanySetup();
+    } else if (currentStep === 1) {
+      handleUploadTrialBalance();
+    } else if (currentStep === 2) { // Handle mapping for step 2
+      // For now, just move to next step. In a real app, you might enforce all accounts mapped.
+      setCurrentStep(currentStep + 1);
+    } else if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCompanyData({
+      ...companyData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const groupedStandardAccounts = standardAccounts?.reduce((acc, account) => {
+    if (!acc[account.category]) {
+      acc[account.category] = [];
+    }
+    acc[account.category].push(account);
+    return acc;
+  }, {} as Record<string, typeof standardAccounts>);
+
+  if (userLoading || periodsLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
